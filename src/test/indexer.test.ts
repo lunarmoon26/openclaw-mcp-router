@@ -16,7 +16,7 @@ vi.mock("../mcp-client.js", () => ({
 
 const mockCfg: McpRouterConfig = {
   servers: [{ name: "fs", transport: "stdio", command: "npx" }],
-  embedding: { provider: "ollama", model: "nomic-embed-text", url: "http://localhost:11434" },
+  embedding: { provider: "ollama", model: "nomic-embed-text", baseUrl: "http://localhost:11434/v1" },
   vectorDb: { path: "/tmp/test-lancedb" },
   search: { topK: 5, minScore: 0.3 },
 };
@@ -93,10 +93,10 @@ describe("runIndexer", () => {
     );
   });
 
-  it("handles Ollama unavailable gracefully — logs warning, returns failed count", async () => {
+  it("handles embedding service unavailable gracefully — logs warning, returns failed count", async () => {
     const store = makeStore();
     const embeddings = {
-      embed: vi.fn().mockRejectedValue(new Error("Ollama not reachable — run `ollama serve`")),
+      embed: vi.fn().mockRejectedValue(new Error("embedding service not reachable at http://localhost:11434/v1")),
       dims: null,
       probeDims: vi.fn(),
     };
@@ -112,7 +112,7 @@ describe("runIndexer", () => {
 
     // Should not throw; failed count should be non-zero
     expect(result.failed).toBeGreaterThan(0);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("ollama serve"));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("not reachable"));
   });
 
   it("handles multiple servers in parallel", async () => {

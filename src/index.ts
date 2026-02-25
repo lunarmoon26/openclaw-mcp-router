@@ -1,6 +1,6 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { parseConfig } from "./config.js";
-import { OllamaEmbeddings } from "./embeddings.js";
+import { createEmbeddings } from "./embeddings.js";
 import { runIndexer } from "./indexer.js";
 import { McpRegistry } from "./mcp-registry.js";
 import { createMcpCallTool } from "./tools/mcp-call-tool.js";
@@ -14,11 +14,14 @@ const mcpRouterPlugin = {
     "Dynamic MCP tool router — semantic search over large MCP catalogs to eliminate context bloat",
 
   register(api: OpenClawPluginApi) {
-    const cfg = parseConfig(api.pluginConfig);
+    const cfg = parseConfig(api.pluginConfig, {
+      openclawConfig: api.config,
+      resolvePath: api.resolvePath,
+    });
     // api.resolvePath handles ~ expansion and resolves relative paths to the config dir
     const resolvedDbPath = api.resolvePath(cfg.vectorDb.path);
 
-    const embeddings = new OllamaEmbeddings(cfg.embedding.url, cfg.embedding.model);
+    const embeddings = createEmbeddings(cfg.embedding);
     const store = new McpToolVectorStore(resolvedDbPath, cfg.embedding.model);
     const registry = new McpRegistry(cfg.servers, api.logger);
 

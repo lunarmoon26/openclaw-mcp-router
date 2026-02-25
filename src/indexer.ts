@@ -1,4 +1,4 @@
-import type { OllamaEmbeddings } from "./embeddings.js";
+import type { Embeddings } from "./embeddings.js";
 import type { McpRegistry } from "./mcp-registry.js";
 import { McpClient } from "./mcp-client.js";
 import type { McpRouterConfig } from "./config.js";
@@ -24,7 +24,7 @@ type IndexerResult = {
 export async function runIndexer(params: {
   cfg: McpRouterConfig;
   store: McpToolVectorStore;
-  embeddings: OllamaEmbeddings;
+  embeddings: Embeddings;
   registry: McpRegistry;
   logger: IndexerLogger;
 }): Promise<IndexerResult> {
@@ -59,7 +59,7 @@ async function indexServer(params: {
     ? R
     : never)["servers"][number];
   store: McpToolVectorStore;
-  embeddings: OllamaEmbeddings;
+  embeddings: Embeddings;
   registry: McpRegistry;
   logger: IndexerLogger;
 }): Promise<IndexerResult> {
@@ -99,10 +99,10 @@ async function indexServer(params: {
     }
   } catch (err) {
     const msg = String(err);
-    // Surface Ollama connectivity errors clearly
-    if (msg.includes("Ollama not reachable") || msg.includes("ollama serve")) {
+    // Surface embedding service connectivity errors clearly
+    if (msg.includes("not reachable") || msg.includes("embedding service")) {
       logger.warn(
-        `mcp-router: Ollama unavailable — run \`ollama serve\` and use the reindex CLI to rebuild the index. ${msg}`,
+        `mcp-router: embedding service unavailable — check that the service is running and run \`openclaw mcp-router reindex\` to rebuild the index. ${msg}`,
       );
     } else {
       logger.warn(`mcp-router: failed to index server "${serverCfg.name}": ${msg}`);

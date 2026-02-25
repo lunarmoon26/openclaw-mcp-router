@@ -1,15 +1,43 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../config.js";
 
+// Mock fs for mcpServersFile tests
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return { ...actual, default: { ...actual, readFileSync: vi.fn() } };
+});
+
+import fs from "node:fs";
+
 describe("parseConfig", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    // Default: file not found for auto-load
+    vi.mocked(fs.readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.TEST_MCP_TOKEN;
+    delete process.env.TEST_API_KEY;
+  });
+
+  // ── Basic validation ──
+
   it("throws when config is not an object", () => {
     expect(() => parseConfig(null)).toThrow("must be an object");
     expect(() => parseConfig("bad")).toThrow("must be an object");
   });
 
-  it("throws when servers is missing or empty", () => {
-    expect(() => parseConfig({})).toThrow("servers");
-    expect(() => parseConfig({ servers: [] })).toThrow("servers");
+  it("throws when no servers are configured from any source", () => {
+    expect(() => parseConfig({})).toThrow("no servers configured");
+  });
+
+  // ── Legacy servers[] ──
+
+  it("throws when legacy servers is empty", () => {
+    expect(() => parseConfig({ servers: [] })).toThrow("no servers configured");
   });
 
   it("throws when stdio server is missing command", () => {
@@ -47,21 +75,12 @@ describe("parseConfig", () => {
     expect(cfg.servers[0].command).toBe("npx");
 
     // defaults
+    expect(cfg.embedding.provider).toBe("ollama");
     expect(cfg.embedding.model).toBe("nomic-embed-text");
-    expect(cfg.embedding.url).toBe("http://localhost:11434");
+    expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
     expect(cfg.search.topK).toBe(5);
     expect(cfg.search.minScore).toBe(0.3);
     expect(cfg.vectorDb.path).toContain("mcp-router");
-  });
-
-  it("applies embedding overrides", () => {
-    const cfg = parseConfig({
-      servers: [{ name: "fs", transport: "stdio", command: "npx" }],
-      embedding: { model: "mxbai-embed-large", url: "http://127.0.0.1:11434" },
-    });
-
-    expect(cfg.embedding.model).toBe("mxbai-embed-large");
-    expect(cfg.embedding.url).toBe("http://127.0.0.1:11434");
   });
 
   it("clamps topK to valid range", () => {
@@ -91,7 +110,6 @@ describe("parseConfig", () => {
       ],
     });
     expect(cfg.servers[0].env?.TOKEN).toBe("secret123");
-    delete process.env.TEST_MCP_TOKEN;
   });
 
   it("resolves ~ in vectorDb path", () => {
@@ -108,5 +126,327 @@ describe("parseConfig", () => {
       servers: [{ name: "gh", transport: "sse", url: "https://api.example.com/mcp/" }],
     });
     expect(cfg.servers[0].url).toBe("https://api.example.com/mcp/");
+  });
+
+  // ── mcpServers dict ──
+
+  it("infers stdio transport from command in mcpServers dict", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        fs: { command: "npx", args: ["-y", "@anthropic/mcp-fs"] },
+      },
+    });
+
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].name).toBe("fs");
+    expect(cfg.servers[0].transport).toBe("stdio");
+    expect(cfg.servers[0].command).toBe("npx");
+    expect(cfg.servers[0].args).toEqual(["-y", "@anthropic/mcp-fs"]);
+  });
+
+  it("infers http transport from url in mcpServers dict", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        remote: { url: "https://mcp.example.com/api" },
+      },
+    });
+
+    expect(cfg.servers[0].transport).toBe("http");
+    expect(cfg.servers[0].url).toBe("https://mcp.example.com/api");
+  });
+
+  it("infers http transport from serverUrl in mcpServers dict", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        remote: { serverUrl: "https://mcp.example.com/api" },
+      },
+    });
+
+    expect(cfg.servers[0].transport).toBe("http");
+    expect(cfg.servers[0].url).toBe("https://mcp.example.com/api");
+  });
+
+  it("allows type override to sse in mcpServers dict", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        legacy: { url: "https://legacy.example.com/sse", type: "sse" },
+      },
+    });
+
+    expect(cfg.servers[0].transport).toBe("sse");
+  });
+
+  it("throws on invalid type override in mcpServers dict", () => {
+    expect(() =>
+      parseConfig({
+        mcpServers: {
+          bad: { url: "https://example.com", type: "websocket" },
+        },
+      }),
+    ).toThrow("type must be stdio, sse, or http");
+  });
+
+  it("throws when mcpServers entry has neither command nor url", () => {
+    expect(() =>
+      parseConfig({
+        mcpServers: { bad: { args: ["foo"] } },
+      }),
+    ).toThrow('must have either "command"');
+  });
+
+  it("expands ${VAR} in mcpServers header values", () => {
+    process.env.TEST_API_KEY = "key-abc";
+    const cfg = parseConfig({
+      mcpServers: {
+        remote: {
+          url: "https://api.example.com",
+          headers: { Authorization: "Bearer ${TEST_API_KEY}" },
+        },
+      },
+    });
+
+    expect(cfg.servers[0].headers?.Authorization).toBe("Bearer key-abc");
+  });
+
+  // ── mcpServers priority over legacy servers ──
+
+  it("mcpServers wins over legacy servers", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        newServer: { command: "new-cmd" },
+      },
+      servers: [{ name: "oldServer", transport: "stdio", command: "old-cmd" }],
+    });
+
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].name).toBe("newServer");
+  });
+
+  // ── mcpServersFile ──
+
+  it("loads servers from mcpServersFile", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        fs: { command: "npx", args: ["-y", "mcp-fs"] },
+        github: { url: "https://github.mcp.example.com" },
+      }),
+    );
+
+    const cfg = parseConfig({ mcpServersFile: "~/my-servers.json" });
+
+    expect(cfg.servers).toHaveLength(2);
+    expect(cfg.servers.find((s) => s.name === "fs")?.transport).toBe("stdio");
+    expect(cfg.servers.find((s) => s.name === "github")?.transport).toBe("http");
+  });
+
+  it("supports { mcpServers: {...} } wrapper format in file", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        mcpServers: {
+          wrapped: { command: "cmd" },
+        },
+      }),
+    );
+
+    const cfg = parseConfig({ mcpServersFile: "~/.mcp.json" });
+
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].name).toBe("wrapped");
+  });
+
+  it("auto-loads default ~/.openclaw/.mcp.json when no servers configured", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        autoloaded: { command: "auto-cmd" },
+      }),
+    );
+
+    const cfg = parseConfig({});
+
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].name).toBe("autoloaded");
+  });
+
+  it("uses resolvePath option for mcpServersFile", () => {
+    const resolvePath = vi.fn((p: string) => `/resolved${p}`);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ s: { command: "cmd" } }),
+    );
+
+    parseConfig({ mcpServersFile: "/my/servers.json" }, { resolvePath });
+
+    expect(resolvePath).toHaveBeenCalledWith("/my/servers.json");
+    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalledWith("/resolved/my/servers.json", "utf-8");
+  });
+
+  it("throws when mcpServersFile contains invalid JSON", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue("not json{");
+
+    expect(() => parseConfig({ mcpServersFile: "/bad.json" })).toThrow("failed to parse");
+  });
+
+  // ── Embedding config ──
+
+  it("applies explicit embedding overrides with baseUrl", () => {
+    const cfg = parseConfig({
+      servers: [{ name: "fs", transport: "stdio", command: "npx" }],
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-test",
+      },
+    });
+
+    expect(cfg.embedding.provider).toBe("openai");
+    expect(cfg.embedding.model).toBe("text-embedding-3-small");
+    expect(cfg.embedding.baseUrl).toBe("https://api.openai.com/v1");
+    expect(cfg.embedding.apiKey).toBe("sk-test");
+  });
+
+  it("applies explicit ollama embedding with default baseUrl", () => {
+    const cfg = parseConfig({
+      servers: [{ name: "fs", transport: "stdio", command: "npx" }],
+      embedding: { provider: "ollama", model: "mxbai-embed-large" },
+    });
+
+    expect(cfg.embedding.provider).toBe("ollama");
+    expect(cfg.embedding.model).toBe("mxbai-embed-large");
+    expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
+  });
+
+  it("backward compat: old embedding.url gets /v1 appended", () => {
+    const cfg = parseConfig({
+      servers: [{ name: "fs", transport: "stdio", command: "npx" }],
+      embedding: { model: "mxbai-embed-large", url: "http://127.0.0.1:11434" },
+    });
+
+    expect(cfg.embedding.baseUrl).toBe("http://127.0.0.1:11434/v1");
+  });
+
+  it("backward compat: old embedding.url trailing slash is handled", () => {
+    const cfg = parseConfig({
+      servers: [{ name: "fs", transport: "stdio", command: "npx" }],
+      embedding: { url: "http://localhost:11434/" },
+    });
+
+    expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
+  });
+
+  it("throws when non-ollama provider has no baseUrl", () => {
+    expect(() =>
+      parseConfig({
+        servers: [{ name: "s", transport: "stdio", command: "x" }],
+        embedding: { provider: "openai", model: "text-embedding-3-small" },
+      }),
+    ).toThrow("baseUrl is required");
+  });
+
+  it("expands ${VAR} in embedding headers", () => {
+    process.env.TEST_API_KEY = "emb-key";
+    const cfg = parseConfig({
+      servers: [{ name: "s", transport: "stdio", command: "x" }],
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        baseUrl: "https://api.openai.com/v1",
+        headers: { "X-Custom": "${TEST_API_KEY}" },
+      },
+    });
+
+    expect(cfg.embedding.headers?.["X-Custom"]).toBe("emb-key");
+  });
+
+  // ── Embedding inherit from memorySearch ──
+
+  it("inherits embedding from memorySearch config", () => {
+    const cfg = parseConfig(
+      { servers: [{ name: "s", transport: "stdio", command: "x" }] },
+      {
+        openclawConfig: {
+          agents: {
+            defaults: {
+              memorySearch: {
+                provider: "openai",
+                model: "text-embedding-3-small",
+                remote: {
+                  baseUrl: "https://api.openai.com/v1",
+                  apiKey: "sk-inherited",
+                  headers: { "X-Org": "my-org" },
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(cfg.embedding.provider).toBe("openai");
+    expect(cfg.embedding.model).toBe("text-embedding-3-small");
+    expect(cfg.embedding.baseUrl).toBe("https://api.openai.com/v1");
+    expect(cfg.embedding.apiKey).toBe("sk-inherited");
+    expect(cfg.embedding.headers?.["X-Org"]).toBe("my-org");
+  });
+
+  it("falls back to Ollama defaults when memorySearch is missing", () => {
+    const cfg = parseConfig(
+      { servers: [{ name: "s", transport: "stdio", command: "x" }] },
+      {
+        openclawConfig: { agents: { defaults: {} } },
+      },
+    );
+
+    expect(cfg.embedding.provider).toBe("ollama");
+    expect(cfg.embedding.model).toBe("nomic-embed-text");
+    expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
+  });
+
+  it("falls back to Ollama defaults when memorySearch uses local provider", () => {
+    const cfg = parseConfig(
+      { servers: [{ name: "s", transport: "stdio", command: "x" }] },
+      {
+        openclawConfig: {
+          agents: {
+            defaults: {
+              memorySearch: { provider: "local" },
+            },
+          },
+        },
+      },
+    );
+
+    expect(cfg.embedding.provider).toBe("ollama");
+    expect(cfg.embedding.model).toBe("nomic-embed-text");
+    expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
+  });
+
+  it("explicit embedding takes priority over memorySearch inherit", () => {
+    const cfg = parseConfig(
+      {
+        servers: [{ name: "s", transport: "stdio", command: "x" }],
+        embedding: {
+          provider: "voyage",
+          model: "voyage-3",
+          baseUrl: "https://api.voyageai.com/v1",
+          apiKey: "pa-explicit",
+        },
+      },
+      {
+        openclawConfig: {
+          agents: {
+            defaults: {
+              memorySearch: {
+                provider: "openai",
+                model: "text-embedding-3-small",
+                remote: { baseUrl: "https://api.openai.com/v1", apiKey: "sk-inherited" },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(cfg.embedding.provider).toBe("voyage");
+    expect(cfg.embedding.apiKey).toBe("pa-explicit");
   });
 });

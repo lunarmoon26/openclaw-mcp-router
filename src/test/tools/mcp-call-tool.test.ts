@@ -15,9 +15,17 @@ vi.mock("../../mcp-client.js", () => ({
   })),
 }));
 
-function makeRegistry(resolved: typeof fsServerCfg | undefined = fsServerCfg) {
+function makeRegistry(resolved?: typeof fsServerCfg) {
   return {
-    resolveServer: vi.fn().mockReturnValue(resolved),
+    resolveServer: vi.fn().mockReturnValue(resolved ?? null),
+    registerToolOwner: vi.fn(),
+    allServers: vi.fn(),
+  };
+}
+
+function makeRegistryWithServer() {
+  return {
+    resolveServer: vi.fn().mockReturnValue(fsServerCfg),
     registerToolOwner: vi.fn(),
     allServers: vi.fn(),
   };
@@ -59,7 +67,7 @@ describe("mcp_call tool", () => {
   });
 
   it("calls the MCP tool and returns result", async () => {
-    const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
+    const tool = createMcpCallTool({ registry: makeRegistryWithServer() as never, logger });
     const result = await tool.execute("id", {
       tool_name: "read_file",
       params_json: '{"path":"/tmp/test.txt"}',
@@ -88,7 +96,7 @@ describe("mcp_call tool", () => {
         }) as never,
     );
 
-    const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
+    const tool = createMcpCallTool({ registry: makeRegistryWithServer() as never, logger });
     await tool.execute("id", { tool_name: "list_dir" });
     expect(callToolMock).toHaveBeenCalledWith("list_dir", {});
   });
@@ -105,7 +113,7 @@ describe("mcp_call tool", () => {
         }) as never,
     );
 
-    const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
+    const tool = createMcpCallTool({ registry: makeRegistryWithServer() as never, logger });
     const result = await tool.execute("id", { tool_name: "read_file" });
 
     expect(disconnectMock).toHaveBeenCalled();

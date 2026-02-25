@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { McpServerConfig } from "./config.js";
 
 export type McpToolDefinition = {
@@ -37,14 +38,25 @@ export class McpClient {
         // Merge env on top of process.env so subprocess inherits PATH etc.
         env: { ...process.env, ...(this.cfg.env ?? {}) } as Record<string, string>,
       });
-    } else {
-      // sse or http — both use SSEClientTransport
+    } else if (this.cfg.transport === "sse") {
       if (!this.cfg.url) {
         throw new Error(
-          `mcp-router: server "${this.cfg.name}" missing url for ${this.cfg.transport} transport`,
+          `mcp-router: server "${this.cfg.name}" missing url for sse transport`,
         );
       }
-      transport = new SSEClientTransport(new URL(this.cfg.url));
+      transport = new SSEClientTransport(new URL(this.cfg.url), {
+        requestInit: this.cfg.headers ? { headers: this.cfg.headers } : undefined,
+      });
+    } else {
+      // http — StreamableHTTP
+      if (!this.cfg.url) {
+        throw new Error(
+          `mcp-router: server "${this.cfg.name}" missing url for http transport`,
+        );
+      }
+      transport = new StreamableHTTPClientTransport(new URL(this.cfg.url), {
+        requestInit: this.cfg.headers ? { headers: this.cfg.headers } : undefined,
+      });
     }
 
     await this.client.connect(transport);

@@ -1,10 +1,10 @@
 import { Type } from "@sinclair/typebox";
-import type { OllamaEmbeddings } from "../embeddings.js";
+import type { Embeddings } from "../embeddings.js";
 import type { McpToolVectorStore } from "../vector-store.js";
 
 type SearchDeps = {
   store: McpToolVectorStore;
-  embeddings: OllamaEmbeddings;
+  embeddings: Embeddings;
   cfg: { topK: number; minScore: number };
 };
 
@@ -59,7 +59,7 @@ export function createMcpSearchTool(deps: SearchDeps) {
               type: "text",
               text:
                 `mcp_search: embedding failed — ${String(err)}\n\n` +
-                "Ensure Ollama is running (`ollama serve`) and the model is pulled.",
+                "Ensure the embedding service is running. Run `openclaw mcp-router reindex` after fixing.",
             },
           ],
           details: { count: 0, error: String(err) },
