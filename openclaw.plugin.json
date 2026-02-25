@@ -1,0 +1,46 @@
+{
+  "id": "mcp-router",
+  "name": "MCP Router",
+  "description": "Semantic search across MCP tool catalogs. Reduces context bloat from ~77k→8.7k tokens by dynamically surfacing only relevant tools.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["servers"],
+    "properties": {
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "transport"],
+          "properties": {
+            "name":      { "type": "string" },
+            "transport": { "type": "string", "enum": ["stdio", "sse", "http"] },
+            "command":   { "type": "string" },
+            "args":      { "type": "array", "items": { "type": "string" } },
+            "env":       { "type": "object", "additionalProperties": { "type": "string" } },
+            "url":       { "type": "string" }
+          }
+        }
+      },
+      "embedding": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "enum": ["ollama"] },
+          "model":    { "type": "string" },
+          "url":      { "type": "string" }
+        }
+      },
+      "vectorDb": {
+        "type": "object",
+        "properties": { "path": { "type": "string" } }
+      },
+      "search": {
+        "type": "object",
+        "properties": {
+          "topK":     { "type": "number", "minimum": 1, "maximum": 20 },
+          "minScore": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

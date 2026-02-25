@@ -1,0 +1,42 @@
+{
+  "name": "openclaw-mcp-router",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Dynamic MCP tool router for OpenClaw — semantic search over large MCP catalogs to eliminate context bloat",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lunarmoon26/openclaw-mcp-router"
+  },
+  "keywords": [
+    "openclaw",
+    "mcp",
+    "plugin",
+    "vector-search",
+    "lancedb",
+    "ollama"
+  ],
+  "dependencies": {
+    "@lancedb/lancedb": "^0.26.2",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.2.24"
+  },
+  "devDependencies": {
+    "openclaw": "^2026.2.19",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
