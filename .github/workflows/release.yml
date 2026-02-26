@@ -5,7 +5,7 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
   id-token: write          # npm provenance (links published package back to this repo+commit)
 
 jobs:
@@ -13,10 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Use a PAT so the version-bump commit can trigger other workflows if needed.
-          # Falls back to GITHUB_TOKEN (works fine, but commits won't trigger further CI).
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -39,18 +35,10 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
 
-      - name: Bump package.json version
-        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json 2>/dev/null || true
-          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-          git push origin HEAD:${{ github.event.release.target_commitish }}
-
       - run: npm ci
+
+      - name: Set package version from tag (publish only, no commit)
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
       - name: Publish to npm
         run: npm publish --provenance --access public
