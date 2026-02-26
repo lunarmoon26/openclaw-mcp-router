@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { EXTENSION_ID } from "../constants.js";
+import { EXTENSION_ID, TOOL_MCP_CALL, TOOL_MCP_SEARCH } from "../constants.js";
 import { McpClient } from "../mcp-client.js";
 import type { McpRegistry } from "../mcp-registry.js";
 
@@ -9,20 +9,20 @@ type CallDeps = {
 };
 
 /**
- * mcp_call — execute a specific MCP tool by name.
+ * TOOL_MCP_CALL — execute a specific MCP tool by name.
  * Looks up the owning server from the registry, opens a fresh connection,
  * calls the tool, and returns the result.
  */
 export function createMcpCallTool(deps: CallDeps) {
   return {
-    name: "mcp_call",
+    name: TOOL_MCP_CALL,
     label: "MCP Call",
     description:
-      "Call an MCP tool by its exact name (as returned by mcp_search). " +
+      `Call an MCP tool by its exact name (as returned by ${TOOL_MCP_SEARCH}). ` +
       "Pass parameters as a JSON object string.",
     parameters: Type.Object({
       tool_name: Type.String({
-        description: "Exact MCP tool name returned by mcp_search.",
+        description: `Exact MCP tool name returned by ${TOOL_MCP_SEARCH}.`,
       }),
       params_json: Type.Optional(
         Type.String({
@@ -72,7 +72,7 @@ export function createMcpCallTool(deps: CallDeps) {
               type: "text",
               text:
                 `Error: unknown tool "${toolName}". ` +
-                "Use mcp_search first to find valid tool names.",
+                `Use ${TOOL_MCP_SEARCH} first to find valid tool names.`,
             },
           ],
           details: { error: "unknown_tool", tool: toolName },
@@ -94,7 +94,7 @@ export function createMcpCallTool(deps: CallDeps) {
         };
       } catch (err) {
         deps.logger.warn(
-          `${EXTENSION_ID}: mcp_call error for "${toolName}" on server "${serverCfg.name}": ${String(err)}`,
+          `${EXTENSION_ID}: ${TOOL_MCP_CALL} error for "${toolName}" on server "${serverCfg.name}": ${String(err)}`,
         );
         return {
           content: [

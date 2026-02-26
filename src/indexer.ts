@@ -2,7 +2,7 @@ import type { Embeddings } from "./embeddings.js";
 import type { McpRegistry } from "./mcp-registry.js";
 import { McpClient } from "./mcp-client.js";
 import type { McpRouterConfig, McpServerConfig } from "./config.js";
-import { EXTENSION_ID } from "./constants.js";
+import { CMD_REINDEX, EXTENSION_ID } from "./constants.js";
 import type { McpToolVectorStore } from "./vector-store.js";
 import { chunkText } from "./chunker.js";
 
@@ -187,7 +187,7 @@ async function indexServer(params: {
         // Surface embedding service connectivity errors clearly
         if (msg.includes("not reachable") || msg.includes("embedding service")) {
           logger.warn(
-            `${EXTENSION_ID}: embedding service unavailable — check that the service is running and run \`openclaw ${EXTENSION_ID} reindex\` to rebuild the index. ${msg}`,
+            `${EXTENSION_ID}: embedding service unavailable — check that the service is running and run \`openclaw ${EXTENSION_ID} ${CMD_REINDEX}\` to rebuild the index. ${msg}`,
           );
         } else {
           logger.warn(`${EXTENSION_ID}: failed to index server "${serverCfg.name}": ${msg}`);

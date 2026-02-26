@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { EXTENSION_ID } from "../constants.js";
+import { CMD_REINDEX, EXTENSION_ID, TOOL_MCP_CALL, TOOL_MCP_SEARCH } from "../constants.js";
 import type { Embeddings } from "../embeddings.js";
 import type { McpToolVectorStore } from "../vector-store.js";
 
@@ -21,12 +21,12 @@ function readStringParam(params: Record<string, unknown>, key: string): string |
  */
 export function createMcpSearchTool(deps: SearchDeps) {
   return {
-    name: "mcp_search",
+    name: TOOL_MCP_SEARCH,
     label: "MCP Search",
     description:
       "Search for MCP tools by describing what you want to do. " +
       "Returns matching tool definitions with their parameter schemas. " +
-      "Use this before mcp_call to find the right tool name.",
+      `Use this before ${TOOL_MCP_CALL} to find the right tool name.`,
     parameters: Type.Object({
       query: Type.String({
         description: "What you want to do, in plain language. E.g. 'list files in a directory'",
@@ -59,8 +59,8 @@ export function createMcpSearchTool(deps: SearchDeps) {
             {
               type: "text",
               text:
-                `mcp_search: embedding failed — ${String(err)}\n\n` +
-                `Ensure the embedding service is running. Run \`openclaw ${EXTENSION_ID} reindex\` after fixing.`,
+                `${TOOL_MCP_SEARCH}: embedding failed — ${String(err)}\n\n` +
+                `Ensure the embedding service is running. Run \`openclaw ${EXTENSION_ID} ${CMD_REINDEX}\` after fixing.`,
             },
           ],
           details: { count: 0, error: String(err) },

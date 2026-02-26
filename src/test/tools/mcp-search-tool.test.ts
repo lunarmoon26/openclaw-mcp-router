@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMcpSearchTool } from "../../tools/mcp-search-tool.js";
+import { TOOL_MCP_SEARCH } from "../../constants.js";
 
 const mockVector = Array.from<number>({ length: 768 }).fill(0.1);
 
@@ -25,7 +26,7 @@ function makeTool(storeResults = makeStore()) {
   });
 }
 
-describe("mcp_search tool", () => {
+describe(`${TOOL_MCP_SEARCH} tool`, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

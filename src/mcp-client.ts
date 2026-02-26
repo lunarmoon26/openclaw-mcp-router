@@ -3,7 +3,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { McpServerConfig } from "./config.js";
-import { EXTENSION_ID } from "./constants.js";
+import { EXTENSION_ID, EXTENSION_VERSION } from "./constants.js";
 
 export type McpToolDefinition = {
   name: string;
@@ -26,7 +26,7 @@ export class McpClient {
     options?.signal?.throwIfAborted();
 
     this.client = new Client(
-      { name: EXTENSION_ID, version: "0.1.0" },
+      { name: EXTENSION_ID, version: EXTENSION_VERSION },
       { capabilities: {} },
     );
 

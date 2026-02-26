@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMcpCallTool } from "../../tools/mcp-call-tool.js";
+import { TOOL_MCP_CALL, TOOL_MCP_SEARCH } from "../../constants.js";
 
 const fsServerCfg = { name: "fs", transport: "stdio" as const, command: "npx" };
 
@@ -33,7 +34,7 @@ function makeRegistryWithServer() {
 
 const logger = { warn: vi.fn(), info: vi.fn() };
 
-describe("mcp_call tool", () => {
+describe(`${TOOL_MCP_CALL} tool`, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -63,7 +64,7 @@ describe("mcp_call tool", () => {
     });
     const result = await tool.execute("id", { tool_name: "unknown_tool" });
     expect((result.content[0] as { text: string }).text).toContain("unknown tool");
-    expect((result.content[0] as { text: string }).text).toContain("mcp_search");
+    expect((result.content[0] as { text: string }).text).toContain(TOOL_MCP_SEARCH);
   });
 
   it("calls the MCP tool and returns result", async () => {

@@ -15,84 +15,174 @@ Two tiny tools replace the full schema dump:
 
 The agent asks for tools it needs instead of receiving every schema upfront.
 
-## Install
+## Prerequisites
 
-```sh
-openclaw plugins install openclaw-mcp-router
-```
+Before installing this plugin you need:
 
-**Alternative: install from source**
+- **[OpenClaw](https://openclaw.ai)** installed and running
+- **[Ollama](https://ollama.ai)** running locally
+- An embedding model pulled:
 
-```bash
-git clone https://github.com/lunarmoon26/openclaw-mcp-router.git
-openclaw plugins install ./openclaw-mcp-router
-```
+  ```sh
+  ollama pull embeddinggemma
+  ollama serve
+  ```
 
-Requires [Ollama](https://ollama.ai) running locally with an embedding model:
+## Quick Start
 
-```sh
-ollama pull embeddinggemma
-ollama serve
-```
+1. **Install the plugin**
 
-## Configuration
+   ```sh
+   openclaw plugins install openclaw-mcp-router
+   ```
 
-Add to `~/.openclaw/openclaw.yml`:
+   **Alternative: install from source**
 
-```yaml
-tools:
-  alsoAllow:
-    - mcp_search
-    - mcp_call
+   ```sh
+   git clone https://github.com/lunarmoon26/openclaw-mcp-router.git
+   openclaw plugins install ./openclaw-mcp-router
+   ```
 
-plugins:
-  openclaw-mcp-router:
-    enabled: true
-    config:
-      servers:
-        - name: filesystem
-          transport: stdio
-          command: npx
-          args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-        - name: github
-          transport: sse
-          url: https://api.githubcopilot.com/mcp/
-      embedding:
-        provider: ollama
-        model: embeddinggemma    # or qwen3-embedding:0.6b, all-minilm
-        url: http://localhost:11434
-      search:
-        topK: 5        # tools returned per search (1–20)
-        minScore: 0.3  # minimum similarity threshold (0–1)
-```
+2. **Run the setup wizard**
 
-### Important: `tools.alsoAllow` is required
+   ```sh
+   openclaw openclaw-mcp-router setup
+   ```
+
+   This guides you through configuring your MCP servers and embedding model. It also automatically adds `mcp_search` and `mcp_call` to `tools.alsoAllow` in `~/.openclaw/openclaw.json`.
+
+3. **Index your servers**
+
+   ```sh
+   openclaw openclaw-mcp-router reindex
+   ```
+
+4. **Restart the gateway** — the tools are now available to your agents.
+
+> **Note:** `~/.openclaw/openclaw.json` is JSON5 — it supports `//` comments and trailing commas.
+
+## Important: `tools.alsoAllow` is required
 
 The plugin registers `mcp_search` and `mcp_call` as **optional tools** (`optional: true`). This means the gateway loads them, but they are **not exposed to agents** unless explicitly allowlisted.
 
-If the plugin is running and `openclaw openclaw-mcp-router stats` shows indexed tools, but your agent can't call `mcp_search` — this is why. Add the allowlist to your config:
+If the plugin is running and `openclaw openclaw-mcp-router stats` shows indexed tools, but your agent can't call `mcp_search` — this is why. The `setup` command adds this automatically, or you can add it manually:
 
-```yaml
-# Global — all agents get access
-tools:
-  alsoAllow:
-    - mcp_search
-    - mcp_call
+```jsonc
+// ~/.openclaw/openclaw.json — global, all agents get access
+{
+  "tools": {
+    "alsoAllow": ["mcp_search", "mcp_call"]
+  }
+}
 ```
 
 Or scope it to specific agents:
 
-```yaml
-# Per-agent or under agents.defaults
-agents:
-  defaults:
-    tools:
-      alsoAllow:
-        - mcp_search
-        - mcp_call
+```jsonc
+{
+  "agents": {
+    "defaults": {
+      "tools": {
+        "alsoAllow": ["mcp_search", "mcp_call"]
+      }
+    }
+  }
+}
 ```
 
+> **Note:** Plugin configs go under `plugins.entries`, not directly under `plugins`.
+> OpenClaw's config schema is strict — keys placed directly under `plugins` other than
+> `enabled`, `allow`, `deny`, `load`, `slots`, `entries`, and `installs` will cause a
+> validation error.
+
 Restart the gateway after changing the config.
+
+## Manual configuration
+
+Instead of using `setup`, you can edit `~/.openclaw/openclaw.json` directly:
+
+```jsonc
+// ~/.openclaw/openclaw.json
+{
+  "tools": {
+    "alsoAllow": ["mcp_search", "mcp_call"]
+  },
+  "plugins": {
+    "entries": {
+      "openclaw-mcp-router": {
+        "enabled": true,
+        "config": {
+          "servers": [
+            {
+              "name": "filesystem",
+              "transport": "stdio",
+              "command": "npx",
+              "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+            },
+            {
+              "name": "github",
+              "transport": "sse",
+              "url": "https://api.githubcopilot.com/mcp/"
+            }
+          ],
+          "embedding": {
+            "provider": "ollama",
+            "model": "embeddinggemma", // or qwen3-embedding:0.6b, all-minilm
+            "url": "http://localhost:11434"
+          },
+          "search": {
+            "topK": 5,      // tools returned per search (1–20)
+            "minScore": 0.3 // minimum similarity threshold (0–1)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Adding and removing servers
+
+The plugin provides non-interactive commands for server management:
+
+```sh
+# Add a stdio server (local process)
+openclaw openclaw-mcp-router add filesystem npx -y @modelcontextprotocol/server-filesystem /tmp
+
+# Add an SSE server
+openclaw openclaw-mcp-router add --transport sse github https://api.githubcopilot.com/mcp/
+
+# Add with environment variables and a custom timeout
+openclaw openclaw-mcp-router add --env API_KEY=abc123 --timeout 120000 myserver uvx my-mcp-server
+
+# List configured servers
+openclaw openclaw-mcp-router list
+
+# Remove a server
+openclaw openclaw-mcp-router remove github
+```
+
+After adding or removing servers, run `openclaw openclaw-mcp-router reindex` to update the index. No gateway restart needed.
+
+## CLI commands
+
+```sh
+openclaw openclaw-mcp-router setup               # Interactive setup wizard
+openclaw openclaw-mcp-router add <name> <cmd> [args...]   # Add a stdio server
+openclaw openclaw-mcp-router add --transport sse <name> <url>  # Add SSE/HTTP server
+openclaw openclaw-mcp-router remove <name>       # Remove a server
+openclaw openclaw-mcp-router list                # List configured servers
+openclaw openclaw-mcp-router reindex             # Re-index all servers
+openclaw openclaw-mcp-router stats               # Show indexed tool count
+```
+
+**`add` flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--transport <stdio\|sse\|http>` | Transport type (default: `stdio`) |
+| `--env KEY=VALUE` | Set an env var on the server; repeatable |
+| `--timeout <ms>` | Per-server connect timeout override |
 
 ## Configuration reference
 
@@ -141,18 +231,30 @@ Retries use exponential backoff: delays are `initialRetryDelay * 2^(attempt-1)`,
 
 Example for a slow-starting Python server:
 
-```yaml
-plugins:
-  openclaw-mcp-router:
-    config:
-      mcpServers:
-        my-python-server:
-          command: uvx
-          args: ["my-mcp-server"]
-          timeout: 120000  # this server needs 2 minutes to start
-      indexer:
-        maxRetries: 5
-        initialRetryDelay: 3000
+```jsonc
+{
+  "plugins": {
+    "entries": {
+      "openclaw-mcp-router": {
+        "config": {
+          "servers": [
+            {
+              "name": "my-python-server",
+              "transport": "stdio",
+              "command": "uvx",
+              "args": ["my-mcp-server"],
+              "timeout": 120000 // this server needs 2 minutes to start
+            }
+          ],
+          "indexer": {
+            "maxRetries": 5,
+            "initialRetryDelay": 3000
+          }
+        }
+      }
+    }
+  }
+}
 ```
 
 ### `search`
@@ -161,16 +263,6 @@ plugins:
 |-------|---------|-------------|
 | `topK` | `5` | Max tools returned per search |
 | `minScore` | `0.3` | Minimum similarity score (0–1) |
-
-## CLI commands
-
-```sh
-# Re-index all configured MCP servers
-openclaw openclaw-mcp-router reindex
-
-# Show indexed tool count
-openclaw openclaw-mcp-router stats
-```
 
 ## How it works
 
@@ -189,6 +281,27 @@ Disabling the plugin (`openclaw plugins disable openclaw-mcp-router`) cancels an
 | `all-minilm` | 384 | Fast and lightweight |
 
 Any Ollama embedding model works — dimensions are detected automatically for unknown models.
+
+## Troubleshooting
+
+### Agent can't call `mcp_search`
+
+Almost always because `mcp_search` and `mcp_call` are not in `tools.alsoAllow`. Run `openclaw openclaw-mcp-router setup` or add them manually (see [Important: `tools.alsoAllow` is required](#important-toolsalsoallow-is-required)).
+
+### `reindex` shows 0 tools indexed
+
+- Check that your MCP servers are reachable. Run `openclaw openclaw-mcp-router reindex` with the gateway stopped and the servers running, then check the output for per-server errors.
+- If using `uvx` or other launchers, the server may need more time to start. Increase `indexer.connectTimeout` and `indexer.maxRetries`.
+
+### Ollama connection error
+
+- Confirm Ollama is running: `curl http://localhost:11434/api/tags`
+- Confirm the embedding model is pulled: `ollama list`
+- If Ollama is on a non-default port, set `embedding.url` in the config.
+
+### Config changes not taking effect
+
+Always restart the gateway after editing `~/.openclaw/openclaw.json`. Run `openclaw openclaw-mcp-router reindex` after adding or removing servers.
 
 ## Background
 
