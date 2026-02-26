@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { EXTENSION_ID } from "../constants.js";
 import type { Embeddings } from "../embeddings.js";
 import type { McpToolVectorStore } from "../vector-store.js";
 
@@ -59,14 +60,29 @@ export function createMcpSearchTool(deps: SearchDeps) {
               type: "text",
               text:
                 `mcp_search: embedding failed — ${String(err)}\n\n` +
-                "Ensure the embedding service is running. Run `openclaw mcp-router reindex` after fixing.",
+                `Ensure the embedding service is running. Run \`openclaw ${EXTENSION_ID} reindex\` after fixing.`,
             },
           ],
           details: { count: 0, error: String(err) },
         };
       }
 
-      const results = await deps.store.searchTools(vector, limit, deps.cfg.minScore);
+      // Overfetch to compensate for dedup of multiple chunks per tool
+      const fetchLimit = Math.min(60, limit * 3);
+      const rawResults = await deps.store.searchTools(vector, fetchLimit, deps.cfg.minScore);
+
+      // Deduplicate: keep highest-scoring chunk per (server_name, tool_name)
+      const seen = new Map<string, (typeof rawResults)[number]>();
+      for (const r of rawResults) {
+        const key = `${r.entry.server_name}::${r.entry.tool_name}`;
+        const existing = seen.get(key);
+        if (!existing || r.score > existing.score) {
+          seen.set(key, r);
+        }
+      }
+      const results = [...seen.values()]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
 
       if (results.length === 0) {
         return {

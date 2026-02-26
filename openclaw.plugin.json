@@ -1,5 +1,5 @@
 {
-  "id": "mcp-router",
+  "id": "openclaw-mcp-router",
   "name": "MCP Router",
   "description": "Semantic search across MCP tool catalogs. Reduces context bloat from ~77k→8.7k tokens by dynamically surfacing only relevant tools.",
   "configSchema": {
@@ -18,7 +18,8 @@
             "url":       { "type": "string" },
             "serverUrl": { "type": "string" },
             "type":      { "type": "string", "enum": ["stdio", "sse", "http"] },
-            "headers":   { "type": "object", "additionalProperties": { "type": "string" } }
+            "headers":   { "type": "object", "additionalProperties": { "type": "string" } },
+            "timeout":   { "type": "number", "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout" }
           }
         }
       },
@@ -39,8 +40,21 @@
             "args":      { "type": "array", "items": { "type": "string" } },
             "env":       { "type": "object", "additionalProperties": { "type": "string" } },
             "url":       { "type": "string" },
-            "headers":   { "type": "object", "additionalProperties": { "type": "string" } }
+            "headers":   { "type": "object", "additionalProperties": { "type": "string" } },
+            "timeout":   { "type": "number", "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout" }
           }
+        }
+      },
+      "indexer": {
+        "type": "object",
+        "description": "Indexer retry and timeout settings",
+        "properties": {
+          "connectTimeout":    { "type": "number", "description": "Per-server default connect timeout in ms (default: 60000)" },
+          "maxRetries":        { "type": "number", "minimum": 0, "description": "Retry attempts per server, 0 = no retry (default: 3)" },
+          "initialRetryDelay": { "type": "number", "description": "Initial backoff delay in ms (default: 2000)" },
+          "maxRetryDelay":     { "type": "number", "description": "Max backoff cap in ms (default: 30000)" },
+          "maxChunkChars":     { "type": "number", "minimum": 0, "description": "Max chars per chunk for long tool descriptions. 0 = disable chunking (default: 500)" },
+          "overlapChars":      { "type": "number", "minimum": 0, "description": "Overlap chars between adjacent chunks (default: 100)" }
         }
       },
       "embedding": {

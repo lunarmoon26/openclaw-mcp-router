@@ -1,4 +1,5 @@
 import type { McpServerConfig } from "./config.js";
+import { EXTENSION_ID } from "./constants.js";
 
 /**
  * In-memory map of tool name → owning server config.
@@ -19,7 +20,7 @@ export class McpRegistry {
     if (this.toolOwnerMap.has(toolName)) {
       const existing = this.toolOwnerMap.get(toolName);
       this.logger?.warn(
-        `mcp-router: tool name collision — "${toolName}" already registered by server ` +
+        `${EXTENSION_ID}: tool name collision — "${toolName}" already registered by server ` +
           `"${existing}"; overwriting with "${serverName}". ` +
           "Use unique tool names across servers to avoid conflicts.",
       );

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EXTENSION_ID } from "./constants.js";
 import type { EmbeddingConfig, EmbeddingProvider } from "./embeddings.js";
 
 export type McpTransportKind = "stdio" | "sse" | "http";
@@ -18,6 +19,23 @@ export type McpServerConfig = {
   url?: string;
   /** sse/http: extra headers; ${VAR} expanded */
   headers?: Record<string, string>;
+  /** Per-server connect timeout in ms; overrides indexer.connectTimeout */
+  timeout?: number;
+};
+
+export type IndexerConfig = {
+  /** Per-server default connect timeout in ms (default: 60_000) */
+  connectTimeout: number;
+  /** Retry attempts per server, 0 = no retry (default: 3) */
+  maxRetries: number;
+  /** Initial backoff delay in ms (default: 2_000) */
+  initialRetryDelay: number;
+  /** Max backoff cap in ms (default: 30_000) */
+  maxRetryDelay: number;
+  /** Max characters per chunk for long tool descriptions. 0 = disable chunking. (default: 500) */
+  maxChunkChars: number;
+  /** Overlap characters between adjacent chunks (default: 100) */
+  overlapChars: number;
 };
 
 export type McpRouterConfig = {
@@ -25,6 +43,7 @@ export type McpRouterConfig = {
   embedding: EmbeddingConfig;
   vectorDb: { path: string };
   search: { topK: number; minScore: number };
+  indexer: IndexerConfig;
 };
 
 export type ParseConfigOpts = {
@@ -53,7 +72,7 @@ function resolveHome(p: string): string {
 }
 
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
-const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
+const DEFAULT_EMBEDDING_MODEL = "embeddinggemma";
 const DEFAULT_MCP_SERVERS_FILE = "~/.openclaw/.mcp.json";
 
 // ── mcpServers dict parsing ──────────────────────────────────────────────
@@ -62,7 +81,7 @@ function parseMcpServersDict(dict: Record<string, unknown>): McpServerConfig[] {
   const servers: McpServerConfig[] = [];
   for (const [name, raw] of Object.entries(dict)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-      throw new Error(`mcp-router: mcpServers["${name}"] must be an object`);
+      throw new Error(`${EXTENSION_ID}: mcpServers["${name}"] must be an object`);
     }
     const sv = raw as Record<string, unknown>;
 
@@ -74,14 +93,14 @@ function parseMcpServersDict(dict: Record<string, unknown>): McpServerConfig[] {
       transport = "http";
     } else {
       throw new Error(
-        `mcp-router: mcpServers["${name}"] must have either "command" (stdio) or "url"/"serverUrl" (http)`,
+        `${EXTENSION_ID}: mcpServers["${name}"] must have either "command" (stdio) or "url"/"serverUrl" (http)`,
       );
     }
 
     // Allow explicit type override (e.g. "sse" for legacy servers)
     if (typeof sv.type === "string") {
       if (!["stdio", "sse", "http"].includes(sv.type)) {
-        throw new Error(`mcp-router: mcpServers["${name}"].type must be stdio, sse, or http`);
+        throw new Error(`${EXTENSION_ID}: mcpServers["${name}"].type must be stdio, sse, or http`);
       }
       transport = sv.type as McpTransportKind;
     }
@@ -98,6 +117,7 @@ function parseMcpServersDict(dict: Record<string, unknown>): McpServerConfig[] {
       env: expandEnvRecord(rawEnv),
       url,
       headers: Object.keys(rawHeaders).length > 0 ? expandEnvRecord(rawHeaders) : undefined,
+      timeout: typeof sv.timeout === "number" ? sv.timeout : undefined,
     });
   }
   return servers;
@@ -118,11 +138,11 @@ function loadMcpServersFile(filePath: string, opts?: ParseConfigOpts): McpServer
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new Error(`mcp-router: failed to parse ${resolved} as JSON`);
+    throw new Error(`${EXTENSION_ID}: failed to parse ${resolved} as JSON`);
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`mcp-router: ${resolved} must contain a JSON object`);
+    throw new Error(`${EXTENSION_ID}: ${resolved} must contain a JSON object`);
   }
 
   const obj = parsed as Record<string, unknown>;
@@ -155,7 +175,7 @@ function resolveEmbeddingConfig(
     } else if (provider === "ollama") {
       baseUrl = DEFAULT_OLLAMA_BASE_URL;
     } else {
-      throw new Error(`mcp-router: embedding.baseUrl is required for provider "${provider}"`);
+      throw new Error(`${EXTENSION_ID}: embedding.baseUrl is required for provider "${provider}"`);
     }
 
     return {
@@ -212,25 +232,25 @@ function resolveEmbeddingConfig(
 function parseLegacyServers(serversRaw: unknown[]): McpServerConfig[] {
   return serversRaw.map((s: unknown, i: number) => {
     if (!s || typeof s !== "object" || Array.isArray(s)) {
-      throw new Error(`mcp-router: servers[${i}] must be an object`);
+      throw new Error(`${EXTENSION_ID}: servers[${i}] must be an object`);
     }
     const sv = s as Record<string, unknown>;
 
     if (typeof sv.name !== "string" || !sv.name.trim()) {
-      throw new Error(`mcp-router: servers[${i}].name is required`);
+      throw new Error(`${EXTENSION_ID}: servers[${i}].name is required`);
     }
     const transport = sv.transport as McpTransportKind;
     if (!["stdio", "sse", "http"].includes(transport)) {
-      throw new Error(`mcp-router: servers[${i}].transport must be stdio, sse, or http`);
+      throw new Error(`${EXTENSION_ID}: servers[${i}].transport must be stdio, sse, or http`);
     }
 
     if (transport === "stdio") {
       if (typeof sv.command !== "string" || !sv.command.trim()) {
-        throw new Error(`mcp-router: servers[${i}] with transport=stdio requires command`);
+        throw new Error(`${EXTENSION_ID}: servers[${i}] with transport=stdio requires command`);
       }
     } else {
       if (typeof sv.url !== "string" || !sv.url.trim()) {
-        throw new Error(`mcp-router: servers[${i}] with transport=${transport} requires url`);
+        throw new Error(`${EXTENSION_ID}: servers[${i}] with transport=${transport} requires url`);
       }
     }
 
@@ -245,6 +265,7 @@ function parseLegacyServers(serversRaw: unknown[]): McpServerConfig[] {
       env: expandEnvRecord(rawEnv),
       url: typeof sv.url === "string" ? sv.url : undefined,
       headers: Object.keys(rawHeaders).length > 0 ? expandEnvRecord(rawHeaders) : undefined,
+      timeout: typeof sv.timeout === "number" ? sv.timeout : undefined,
     };
   });
 }
@@ -253,10 +274,12 @@ function parseLegacyServers(serversRaw: unknown[]): McpServerConfig[] {
 
 /** Parse and validate raw plugin config, applying defaults. Throws on invalid input. */
 export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConfig {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error("mcp-router: config must be an object");
+  // Treat null/undefined as empty config — allows auto-loading from default file
+  const normalized = raw ?? {};
+  if (typeof normalized !== "object" || Array.isArray(normalized)) {
+    throw new Error(`${EXTENSION_ID}: config must be an object`);
   }
-  const r = raw as Record<string, unknown>;
+  const r = normalized as Record<string, unknown>;
 
   // ── Server resolution priority: mcpServers > mcpServersFile > servers (legacy) ──
   let servers: McpServerConfig[] = [];
@@ -272,11 +295,8 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     servers = loadMcpServersFile(DEFAULT_MCP_SERVERS_FILE, opts);
   }
 
-  if (servers.length === 0) {
-    throw new Error(
-      "mcp-router: no servers configured. Provide mcpServers, mcpServersFile, or servers[].",
-    );
-  }
+  // Empty servers is valid — user may add servers later.
+  // Callers should check servers.length and skip indexing if zero.
 
   // ── Embedding config ──
   const embRaw = r.embedding && typeof r.embedding === "object" && !Array.isArray(r.embedding)
@@ -289,7 +309,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   const dbPath =
     typeof vdbRaw.path === "string"
       ? resolveHome(vdbRaw.path)
-      : path.join(os.homedir(), ".openclaw", "mcp-router", "lancedb");
+      : path.join(os.homedir(), ".openclaw", EXTENSION_ID, "lancedb");
   const vectorDb = { path: dbPath };
 
   // ── search defaults ──
@@ -299,5 +319,16 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     minScore: typeof srchRaw.minScore === "number" ? srchRaw.minScore : 0.3,
   };
 
-  return { servers, embedding, vectorDb, search };
+  // ── indexer defaults ──
+  const idxRaw = (r.indexer ?? {}) as Record<string, unknown>;
+  const indexer: IndexerConfig = {
+    connectTimeout: typeof idxRaw.connectTimeout === "number" ? idxRaw.connectTimeout : 60_000,
+    maxRetries: typeof idxRaw.maxRetries === "number" ? Math.max(0, idxRaw.maxRetries) : 3,
+    initialRetryDelay: typeof idxRaw.initialRetryDelay === "number" ? idxRaw.initialRetryDelay : 2_000,
+    maxRetryDelay: typeof idxRaw.maxRetryDelay === "number" ? idxRaw.maxRetryDelay : 30_000,
+    maxChunkChars: typeof idxRaw.maxChunkChars === "number" ? Math.max(0, idxRaw.maxChunkChars) : 500,
+    overlapChars: typeof idxRaw.overlapChars === "number" ? Math.max(0, idxRaw.overlapChars) : 100,
+  };
+
+  return { servers, embedding, vectorDb, search, indexer };
 }

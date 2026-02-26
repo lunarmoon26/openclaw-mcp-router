@@ -46,7 +46,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
       apiKey: "sk-test",
     });
     await emb.embed("test");
@@ -67,7 +67,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     await emb.embed("test");
 
@@ -87,7 +87,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
       headers: { "X-Custom": "custom-value" },
     });
     await emb.embed("test");
@@ -107,7 +107,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb2 = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     expect(emb2.dims).toBe(768);
   });
@@ -144,7 +144,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     await expect(emb.embed("test")).rejects.toThrow("embedding service not reachable");
   });
@@ -178,7 +178,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     await expect(emb.embed("test")).rejects.toThrow("data[0].embedding");
   });
@@ -194,7 +194,7 @@ describe("OpenAICompatibleEmbeddings", () => {
 
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1/",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     await emb.embed("test");
 
@@ -207,7 +207,7 @@ describe("OpenAICompatibleEmbeddings", () => {
   it("probeDims returns cached dims without network call", async () => {
     const emb = new OpenAICompatibleEmbeddings({
       baseUrl: "http://localhost:11434/v1",
-      model: "nomic-embed-text",
+      model: "embeddinggemma",
     });
     const dims = await emb.probeDims();
     expect(dims).toBe(768);
@@ -256,26 +256,26 @@ describe("OllamaEmbeddings (deprecated)", () => {
   });
 
   it("rejects non-localhost URLs", () => {
-    expect(() => new OllamaEmbeddings("http://example.com:11434", "nomic-embed-text")).toThrow(
+    expect(() => new OllamaEmbeddings("http://example.com:11434", "embeddinggemma")).toThrow(
       "localhost",
     );
-    expect(() => new OllamaEmbeddings("http://10.0.0.1:11434", "nomic-embed-text")).toThrow(
+    expect(() => new OllamaEmbeddings("http://10.0.0.1:11434", "embeddinggemma")).toThrow(
       "localhost",
     );
   });
 
   it("accepts localhost and 127.0.0.1", () => {
-    expect(() => new OllamaEmbeddings("http://localhost:11434", "nomic-embed-text")).not.toThrow();
+    expect(() => new OllamaEmbeddings("http://localhost:11434", "embeddinggemma")).not.toThrow();
     expect(
-      () => new OllamaEmbeddings("http://127.0.0.1:11434", "nomic-embed-text"),
+      () => new OllamaEmbeddings("http://127.0.0.1:11434", "embeddinggemma"),
     ).not.toThrow();
   });
 
   it("pre-populates dims for known models", () => {
-    const emb = new OllamaEmbeddings("http://localhost:11434", "nomic-embed-text");
+    const emb = new OllamaEmbeddings("http://localhost:11434", "embeddinggemma");
     expect(emb.dims).toBe(768);
 
-    const emb2 = new OllamaEmbeddings("http://localhost:11434", "mxbai-embed-large");
+    const emb2 = new OllamaEmbeddings("http://localhost:11434", "qwen3-embedding:0.6b");
     expect(emb2.dims).toBe(1024);
   });
 
@@ -294,7 +294,7 @@ describe("OllamaEmbeddings (deprecated)", () => {
       }),
     );
 
-    const emb = new OllamaEmbeddings("http://localhost:11434", "nomic-embed-text");
+    const emb = new OllamaEmbeddings("http://localhost:11434", "embeddinggemma");
     const result = await emb.embed("hello world");
 
     expect(result).toEqual(mockEmbed);
@@ -307,7 +307,7 @@ describe("OllamaEmbeddings (deprecated)", () => {
   it("throws a friendly error when Ollama is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
-    const emb = new OllamaEmbeddings("http://localhost:11434", "nomic-embed-text");
+    const emb = new OllamaEmbeddings("http://localhost:11434", "embeddinggemma");
     await expect(emb.embed("test")).rejects.toThrow("ollama serve");
   });
 
@@ -321,7 +321,7 @@ describe("OllamaEmbeddings (deprecated)", () => {
       }),
     );
 
-    const emb = new OllamaEmbeddings("http://localhost:11434", "nomic-embed-text");
+    const emb = new OllamaEmbeddings("http://localhost:11434", "embeddinggemma");
     await expect(emb.embed("test")).rejects.toThrow("404");
   });
 
