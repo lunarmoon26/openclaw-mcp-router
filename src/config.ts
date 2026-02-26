@@ -73,7 +73,23 @@ function resolveHome(p: string): string {
 
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
 const DEFAULT_EMBEDDING_MODEL = "embeddinggemma";
-const DEFAULT_MCP_SERVERS_FILE = "~/.openclaw/.mcp.json";
+
+/**
+ * Resolve the .openclaw state directory using the same env-var priority as
+ * locateOpenclawConfig() in config-writer.ts:
+ *   OPENCLAW_CONFIG_PATH → directory of that file
+ *   OPENCLAW_STATE_DIR   → that directory
+ *   fallback             → ~/.openclaw
+ */
+function locateOpenclawDir(): string {
+  if (process.env.OPENCLAW_CONFIG_PATH) {
+    return path.dirname(process.env.OPENCLAW_CONFIG_PATH);
+  }
+  if (process.env.OPENCLAW_STATE_DIR) {
+    return process.env.OPENCLAW_STATE_DIR;
+  }
+  return path.join(os.homedir(), ".openclaw");
+}
 
 // ── mcpServers dict parsing ──────────────────────────────────────────────
 
@@ -292,7 +308,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     servers = parseLegacyServers(r.servers);
   } else {
     // Auto-load default file when no server source is configured
-    servers = loadMcpServersFile(DEFAULT_MCP_SERVERS_FILE, opts);
+    servers = loadMcpServersFile(path.join(locateOpenclawDir(), EXTENSION_ID, ".mcp.json"), opts);
   }
 
   // Empty servers is valid — user may add servers later.
@@ -309,7 +325,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   const dbPath =
     typeof vdbRaw.path === "string"
       ? resolveHome(vdbRaw.path)
-      : path.join(os.homedir(), ".openclaw", EXTENSION_ID, "lancedb");
+      : path.join(locateOpenclawDir(), EXTENSION_ID, "lancedb");
   const vectorDb = { path: dbPath };
 
   // ── search defaults ──

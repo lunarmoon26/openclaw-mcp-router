@@ -61,6 +61,25 @@ Before installing this plugin you need:
 
 > **Note:** `~/.openclaw/openclaw.json` is JSON5 — it supports `//` comments and trailing commas.
 
+> **Tip: persist your MCP servers across reinstalls.**
+> Store your MCP server definitions in `~/.openclaw/openclaw-mcp-router/.mcp.json`. The plugin auto-loads this file when no `mcpServers` key is present in the plugin config, so your server list survives plugin reinstalls, upgrades, or config resets — you won't need to re-run setup just to restore your servers.
+>
+> ```jsonc
+> // ~/.openclaw/openclaw-mcp-router/.mcp.json
+> {
+>   "mcpServers": {
+>     "filesystem": {
+>       "command": "npx",
+>       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+>     },
+>     "github": {
+>       "url": "https://api.githubcopilot.com/mcp/",
+>       "transport": "sse"
+>     }
+>   }
+> }
+> ```
+
 ## Important: `tools.alsoAllow` is required
 
 The plugin registers `mcp_search` and `mcp_call` as **optional tools** (`optional: true`). This means the gateway loads them, but they are **not exposed to agents** unless explicitly allowlisted.

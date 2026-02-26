@@ -108,14 +108,16 @@ export async function runSetupCommand(): Promise<void> {
     abortIfCancel(addMore);
   }
 
-  // Step 3: Search settings (optional/advanced)
+  // Step 3: Advanced settings (optional)
   let topK = 5;
   let minScore = 0.3;
+  let maxChunkChars = 500;
+  let overlapChars = 100;
 
-  const customizeSearch = await confirm({ message: "Customize search settings? (advanced)" });
-  abortIfCancel(customizeSearch);
+  const customizeAdvanced = await confirm({ message: "Customize advanced settings?" });
+  abortIfCancel(customizeAdvanced);
 
-  if (customizeSearch === true) {
+  if (customizeAdvanced === true) {
     const rawTopK = await text({
       message: "Max tools returned per search (topK)",
       initialValue: "5",
@@ -128,8 +130,22 @@ export async function runSetupCommand(): Promise<void> {
     });
     abortIfCancel(rawMinScore);
 
+    const rawMaxChunkChars = await text({
+      message: "Max characters per chunk for long descriptions (maxChunkChars, 0 = disable)",
+      initialValue: "500",
+    });
+    abortIfCancel(rawMaxChunkChars);
+
+    const rawOverlapChars = await text({
+      message: "Overlap characters between adjacent chunks (overlapChars)",
+      initialValue: "100",
+    });
+    abortIfCancel(rawOverlapChars);
+
     topK = parseInt(rawTopK as string, 10) || 5;
     minScore = parseFloat(rawMinScore as string) || 0.3;
+    maxChunkChars = parseInt(rawMaxChunkChars as string, 10) || 500;
+    overlapChars = parseInt(rawOverlapChars as string, 10) || 100;
   }
 
   // Step 4: Write config
@@ -149,6 +165,7 @@ export async function runSetupCommand(): Promise<void> {
       url: ollamaUrl as string,
     },
     search: { topK, minScore },
+    indexer: { maxChunkChars, overlapChars },
   };
 
   if (servers.length > 0) {
