@@ -142,3 +142,5 @@ vite.config.ts.timestamp-*
 *.js.map
 .DS_Store
 *.lancedb/
+.claude
+CLAUDE.md
