@@ -1,6 +1,6 @@
 {
   "name": "openclaw-mcp-router",
-  "version": "0.2.2",
+  "version": "0.1.0",
   "private": false,
   "description": "Dynamic MCP tool router for OpenClaw — semantic search over large MCP catalogs to eliminate context bloat",
   "type": "module",
