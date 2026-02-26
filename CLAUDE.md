@@ -17,7 +17,7 @@ This is an **OpenClaw plugin** that solves MCP context bloat. Instead of loading
 
 ### Data Flow
 
-1. **Startup (indexing):** Plugin connects to each configured MCP server in parallel → lists tools → embeds descriptions via Ollama → stores vectors in local LanceDB
+1. **Startup (indexing):** Plugin connects to each configured MCP server in parallel (with retry/backoff per server) → lists tools → embeds descriptions via Ollama → stores vectors in local LanceDB. An `AbortController` governs the lifecycle — `stop()` cancels all in-flight connections and delays immediately.
 2. **Search:** Agent calls `mcp_search(query)` → query embedded → vector similarity search → returns matching tool cards with schemas
 3. **Execution:** Agent calls `mcp_call(tool_name, params_json)` → registry lookup for owning server → fresh MCP client connection → execute → return result
 
@@ -26,11 +26,11 @@ This is an **OpenClaw plugin** that solves MCP context bloat. Instead of loading
 | Module | Role |
 |--------|------|
 | `src/index.ts` | Plugin entry point — registers tools, CLI commands, and startup service with OpenClaw's `OpenClawPluginApi` |
-| `src/config.ts` | Parses plugin YAML config into typed `McpRouterConfig`; validates, applies defaults, expands `${VAR}` and `~/` |
+| `src/config.ts` | Parses plugin YAML config into typed `McpRouterConfig` (including `IndexerConfig` and per-server `timeout`); validates, applies defaults, expands `${VAR}` and `~/` |
 | `src/embeddings.ts` | `OllamaEmbeddings` — embeds text via Ollama's `/api/embeddings`; SSRF-safe (localhost-only); caches known model dimensions |
 | `src/vector-store.ts` | `McpToolVectorStore` — LanceDB wrapper; lazy init; upsert via delete-then-add; L2 distance → similarity score |
-| `src/indexer.ts` | `runIndexer()` — parallel server indexing with `Promise.allSettled`; graceful degradation if Ollama or a server is down |
-| `src/mcp-client.ts` | `McpClient` — thin MCP SDK wrapper; supports stdio/sse/http transports |
+| `src/indexer.ts` | `runIndexer()` — parallel server indexing with `Promise.allSettled`; per-server retry with exponential backoff; `AbortSignal` threading for cancellation; `abortableDelay()` helper |
+| `src/mcp-client.ts` | `McpClient` — thin MCP SDK wrapper; supports stdio/sse/http transports; `connect()` accepts optional `{ signal, timeout }` forwarded to SDK |
 | `src/mcp-registry.ts` | `McpRegistry` — in-memory `toolName → serverConfig` map; last-writer-wins on name collisions |
 | `src/tools/mcp-search-tool.ts` | `mcp_search` tool — embeds query, searches vector store, formats tool cards |
 | `src/tools/mcp-call-tool.ts` | `mcp_call` tool — resolves server from registry, opens fresh connection, executes, disconnects |
@@ -41,6 +41,8 @@ This is an **OpenClaw plugin** that solves MCP context bloat. Instead of loading
 - **Optional tool registration.** Both tools use `{ optional: true }` — they only appear in agent context when `tools.alsoAllow` includes them.
 - **Compound tool IDs.** Vector store entries use `"${serverName}::${toolName}"` as stable upsert keys.
 - **Graceful degradation.** Indexer uses `Promise.allSettled` — one failing server doesn't block others. Ollama being unreachable is a warning, not a crash.
+- **Retry with backoff.** Each server gets `maxRetries` attempts with exponential backoff (`initialRetryDelay * 2^(attempt-1)`, capped at `maxRetryDelay`). Per-server `timeout` overrides the global `indexer.connectTimeout`.
+- **AbortSignal lifecycle.** `runIndexer` accepts an optional `AbortSignal`. The plugin entry point manages an `AbortController` — `start()` creates one, `stop()` aborts it. The `reindex` CLI command handles SIGINT. `abortableDelay()` ensures backoff waits are cancelled immediately on abort.
 - **Fresh connections per call.** `mcp_call` opens a new MCP client connection for each invocation (stateless, no pooling).
 
 ## Testing

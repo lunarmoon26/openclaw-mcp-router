@@ -1,8 +1,10 @@
+import { EXTENSION_ID } from "./constants.js";
+
 // Known embedding dimensions by model name (avoids a probe round-trip for common models)
 const KNOWN_DIMS: Record<string, number> = {
   // Ollama models
-  "nomic-embed-text": 768,
-  "mxbai-embed-large": 1024,
+  "embeddinggemma": 768,
+  "qwen3-embedding:0.6b": 1024,
   "all-minilm": 384,
   // OpenAI models
   "text-embedding-3-small": 1536,
@@ -69,21 +71,21 @@ export class OpenAICompatibleEmbeddings implements Embeddings {
       });
     } catch (err) {
       throw new Error(
-        `mcp-router: embedding service not reachable at ${this.baseUrl} — check that the service is running. ${String(err)}`,
+        `${EXTENSION_ID}: embedding service not reachable at ${this.baseUrl} — check that the service is running. ${String(err)}`,
       );
     }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new Error(
-        `mcp-router: embedding service returned HTTP ${response.status}: ${body.slice(0, 200)}`,
+        `${EXTENSION_ID}: embedding service returned HTTP ${response.status}: ${body.slice(0, 200)}`,
       );
     }
 
     const data = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
     const embedding = data.data?.[0]?.embedding;
     if (!Array.isArray(embedding)) {
-      throw new Error("mcp-router: embedding response missing 'data[0].embedding' field");
+      throw new Error(`${EXTENSION_ID}: embedding response missing 'data[0].embedding' field`);
     }
 
     if (this._dims === null) {
@@ -131,7 +133,7 @@ export class OllamaEmbeddings implements Embeddings {
     const host = parsed.hostname;
     if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1") {
       throw new Error(
-        `mcp-router: Ollama URL must point to localhost (got ${host}). ` +
+        `${EXTENSION_ID}: Ollama URL must point to localhost (got ${host}). ` +
           "Embedding requests are only allowed to loopback addresses.",
       );
     }
@@ -152,20 +154,20 @@ export class OllamaEmbeddings implements Embeddings {
       });
     } catch (err) {
       throw new Error(
-        `mcp-router: Ollama not reachable at ${this.baseUrl} — run \`ollama serve\`. ${String(err)}`,
+        `${EXTENSION_ID}: Ollama not reachable at ${this.baseUrl} — run \`ollama serve\`. ${String(err)}`,
       );
     }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new Error(
-        `mcp-router: Ollama returned HTTP ${response.status}: ${body.slice(0, 200)}`,
+        `${EXTENSION_ID}: Ollama returned HTTP ${response.status}: ${body.slice(0, 200)}`,
       );
     }
 
     const data = (await response.json()) as { embedding?: number[] };
     if (!Array.isArray(data.embedding)) {
-      throw new Error("mcp-router: Ollama response missing 'embedding' field");
+      throw new Error(`${EXTENSION_ID}: Ollama response missing 'embedding' field`);
     }
 
     // Cache dims after first successful embed (used for LanceDB schema)

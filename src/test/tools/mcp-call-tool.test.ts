@@ -41,19 +41,19 @@ describe("mcp_call tool", () => {
   it("returns error when tool_name is missing", async () => {
     const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
     const result = await tool.execute("id", {});
-    expect(result.content[0].text).toContain("tool_name is required");
+    expect((result.content[0] as { text: string }).text).toContain("tool_name is required");
   });
 
   it("returns error for invalid params_json", async () => {
     const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
     const result = await tool.execute("id", { tool_name: "read_file", params_json: "not-json" });
-    expect(result.content[0].text).toContain("invalid params_json");
+    expect((result.content[0] as { text: string }).text).toContain("invalid params_json");
   });
 
   it("returns error when params_json is an array", async () => {
     const tool = createMcpCallTool({ registry: makeRegistry() as never, logger });
     const result = await tool.execute("id", { tool_name: "read_file", params_json: "[]" });
-    expect(result.content[0].text).toContain("JSON object");
+    expect((result.content[0] as { text: string }).text).toContain("JSON object");
   });
 
   it("returns error when tool is not found in registry", async () => {
@@ -62,8 +62,8 @@ describe("mcp_call tool", () => {
       logger,
     });
     const result = await tool.execute("id", { tool_name: "unknown_tool" });
-    expect(result.content[0].text).toContain("unknown tool");
-    expect(result.content[0].text).toContain("mcp_search");
+    expect((result.content[0] as { text: string }).text).toContain("unknown tool");
+    expect((result.content[0] as { text: string }).text).toContain("mcp_search");
   });
 
   it("calls the MCP tool and returns result", async () => {
@@ -73,7 +73,7 @@ describe("mcp_call tool", () => {
       params_json: '{"path":"/tmp/test.txt"}',
     });
 
-    expect(result.content[0].text).toBe("file contents here");
+    expect((result.content[0] as { text: string }).text).toBe("file contents here");
     expect(result.details).toMatchObject({
       tool: "read_file",
       server: "fs",

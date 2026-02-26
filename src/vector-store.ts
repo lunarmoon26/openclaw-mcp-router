@@ -1,11 +1,5 @@
 import type * as LanceDB from "@lancedb/lancedb";
-
-// Known embedding dimensions — kept in sync with embeddings.ts
-const KNOWN_DIMS: Record<string, number> = {
-  "nomic-embed-text": 768,
-  "mxbai-embed-large": 1024,
-  "all-minilm": 384,
-};
+import { EXTENSION_ID } from "./constants.js";
 
 const TABLE_NAME = "mcp_tools";
 
@@ -34,7 +28,7 @@ function loadLanceDB(): Promise<typeof import("@lancedb/lancedb")> {
   return lancedbPromise.catch((err) => {
     lancedbPromise = null;
     throw new Error(
-      `mcp-router: failed to load LanceDB native bindings. ${String(err)}`,
+      `${EXTENSION_ID}: failed to load LanceDB native bindings. ${String(err)}`,
       { cause: err },
     );
   });
@@ -47,7 +41,7 @@ export class McpToolVectorStore {
 
   constructor(
     private readonly dbPath: string,
-    private readonly modelName: string,
+    private readonly getDims: () => Promise<number>,
   ) {}
 
   private async ensureInitialized(): Promise<void> {
@@ -67,7 +61,7 @@ export class McpToolVectorStore {
       this.table = await this.db.openTable(TABLE_NAME);
     } else {
       // Create table with sentinel row to establish schema, then delete sentinel
-      const vectorDim = KNOWN_DIMS[this.modelName] ?? 768;
+      const vectorDim = await this.getDims();
       this.table = await this.db.createTable(TABLE_NAME, [
         {
           tool_id: "__schema__",
@@ -124,6 +118,25 @@ export class McpToolVectorStore {
     });
 
     return results.filter((r) => r.score >= minScore);
+  }
+
+  /**
+   * Delete all chunk rows for a specific tool (by server_name + tool_name).
+   * Needed because a tool that previously had N chunks but now has M
+   * would leave orphan rows if we only deleted by exact tool_id.
+   */
+  async deleteToolChunks(serverName: string, toolName: string): Promise<void> {
+    await this.ensureInitialized();
+    const safeSrv = serverName.replace(/'/g, "\\'");
+    const safeTool = toolName.replace(/'/g, "\\'");
+    await this.table!.delete(`server_name = '${safeSrv}' AND tool_name = '${safeTool}'`);
+  }
+
+  /** Batch insert entries without delete. Used after deleteToolChunks. */
+  async addToolEntries(entries: McpToolEntry[]): Promise<void> {
+    if (entries.length === 0) return;
+    await this.ensureInitialized();
+    await this.table!.add(entries);
   }
 
   /** Delete all tool entries belonging to a server. */

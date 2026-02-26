@@ -1,6 +1,6 @@
 {
   "name": "openclaw-mcp-router",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": false,
   "description": "Dynamic MCP tool router for OpenClaw — semantic search over large MCP catalogs to eliminate context bloat",
   "type": "module",
@@ -23,10 +23,10 @@
     "@sinclair/typebox": "^0.34.48"
   },
   "peerDependencies": {
-    "openclaw": "^2026.2.24"
+    "openclaw": "^2026.2.23"
   },
   "devDependencies": {
-    "openclaw": "^2026.2.19",
+    "openclaw": "^2026.2.23",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },

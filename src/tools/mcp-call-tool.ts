@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { EXTENSION_ID } from "../constants.js";
 import { McpClient } from "../mcp-client.js";
 import type { McpRegistry } from "../mcp-registry.js";
 
@@ -93,7 +94,7 @@ export function createMcpCallTool(deps: CallDeps) {
         };
       } catch (err) {
         deps.logger.warn(
-          `mcp-router: mcp_call error for "${toolName}" on server "${serverCfg.name}": ${String(err)}`,
+          `${EXTENSION_ID}: mcp_call error for "${toolName}" on server "${serverCfg.name}": ${String(err)}`,
         );
         return {
           content: [

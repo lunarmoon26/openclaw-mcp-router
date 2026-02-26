@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../config.js";
+import { EXTENSION_ID } from "../constants.js";
 
 // Mock fs for mcpServersFile tests
 vi.mock("node:fs", async () => {
@@ -26,18 +27,28 @@ describe("parseConfig", () => {
   // ── Basic validation ──
 
   it("throws when config is not an object", () => {
-    expect(() => parseConfig(null)).toThrow("must be an object");
     expect(() => parseConfig("bad")).toThrow("must be an object");
+    expect(() => parseConfig(42)).toThrow("must be an object");
+    expect(() => parseConfig([])).toThrow("must be an object");
   });
 
-  it("throws when no servers are configured from any source", () => {
-    expect(() => parseConfig({})).toThrow("no servers configured");
+  it("treats null/undefined as empty config with no servers", () => {
+    const cfg1 = parseConfig(null);
+    expect(cfg1.servers).toHaveLength(0);
+    const cfg2 = parseConfig(undefined);
+    expect(cfg2.servers).toHaveLength(0);
+  });
+
+  it("returns empty servers when no servers are configured from any source", () => {
+    const cfg = parseConfig({});
+    expect(cfg.servers).toHaveLength(0);
   });
 
   // ── Legacy servers[] ──
 
-  it("throws when legacy servers is empty", () => {
-    expect(() => parseConfig({ servers: [] })).toThrow("no servers configured");
+  it("returns empty servers when legacy servers is empty", () => {
+    const cfg = parseConfig({ servers: [] });
+    expect(cfg.servers).toHaveLength(0);
   });
 
   it("throws when stdio server is missing command", () => {
@@ -76,11 +87,11 @@ describe("parseConfig", () => {
 
     // defaults
     expect(cfg.embedding.provider).toBe("ollama");
-    expect(cfg.embedding.model).toBe("nomic-embed-text");
+    expect(cfg.embedding.model).toBe("embeddinggemma");
     expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
     expect(cfg.search.topK).toBe(5);
     expect(cfg.search.minScore).toBe(0.3);
-    expect(cfg.vectorDb.path).toContain("mcp-router");
+    expect(cfg.vectorDb.path).toContain(EXTENSION_ID);
   });
 
   it("clamps topK to valid range", () => {
@@ -307,18 +318,18 @@ describe("parseConfig", () => {
   it("applies explicit ollama embedding with default baseUrl", () => {
     const cfg = parseConfig({
       servers: [{ name: "fs", transport: "stdio", command: "npx" }],
-      embedding: { provider: "ollama", model: "mxbai-embed-large" },
+      embedding: { provider: "ollama", model: "qwen3-embedding:0.6b" },
     });
 
     expect(cfg.embedding.provider).toBe("ollama");
-    expect(cfg.embedding.model).toBe("mxbai-embed-large");
+    expect(cfg.embedding.model).toBe("qwen3-embedding:0.6b");
     expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
   });
 
   it("backward compat: old embedding.url gets /v1 appended", () => {
     const cfg = parseConfig({
       servers: [{ name: "fs", transport: "stdio", command: "npx" }],
-      embedding: { model: "mxbai-embed-large", url: "http://127.0.0.1:11434" },
+      embedding: { model: "qwen3-embedding:0.6b", url: "http://127.0.0.1:11434" },
     });
 
     expect(cfg.embedding.baseUrl).toBe("http://127.0.0.1:11434/v1");
@@ -397,7 +408,7 @@ describe("parseConfig", () => {
     );
 
     expect(cfg.embedding.provider).toBe("ollama");
-    expect(cfg.embedding.model).toBe("nomic-embed-text");
+    expect(cfg.embedding.model).toBe("embeddinggemma");
     expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
   });
 
@@ -416,7 +427,7 @@ describe("parseConfig", () => {
     );
 
     expect(cfg.embedding.provider).toBe("ollama");
-    expect(cfg.embedding.model).toBe("nomic-embed-text");
+    expect(cfg.embedding.model).toBe("embeddinggemma");
     expect(cfg.embedding.baseUrl).toBe("http://localhost:11434/v1");
   });
 
@@ -448,5 +459,77 @@ describe("parseConfig", () => {
 
     expect(cfg.embedding.provider).toBe("voyage");
     expect(cfg.embedding.apiKey).toBe("pa-explicit");
+  });
+
+  // ── Indexer config ──
+
+  it("applies default indexer values", () => {
+    const cfg = parseConfig({});
+    expect(cfg.indexer).toEqual({
+      connectTimeout: 60_000,
+      maxRetries: 3,
+      initialRetryDelay: 2_000,
+      maxRetryDelay: 30_000,
+      maxChunkChars: 500,
+      overlapChars: 100,
+    });
+  });
+
+  it("applies custom indexer config", () => {
+    const cfg = parseConfig({
+      indexer: {
+        connectTimeout: 10_000,
+        maxRetries: 5,
+        initialRetryDelay: 1_000,
+        maxRetryDelay: 15_000,
+        maxChunkChars: 4000,
+        overlapChars: 400,
+      },
+    });
+    expect(cfg.indexer).toEqual({
+      connectTimeout: 10_000,
+      maxRetries: 5,
+      initialRetryDelay: 1_000,
+      maxRetryDelay: 15_000,
+      maxChunkChars: 4000,
+      overlapChars: 400,
+    });
+  });
+
+  it("clamps maxRetries to non-negative", () => {
+    const cfg = parseConfig({ indexer: { maxRetries: -2 } });
+    expect(cfg.indexer.maxRetries).toBe(0);
+  });
+
+  it("clamps maxChunkChars to non-negative", () => {
+    const cfg = parseConfig({ indexer: { maxChunkChars: -100 } });
+    expect(cfg.indexer.maxChunkChars).toBe(0);
+  });
+
+  it("clamps overlapChars to non-negative", () => {
+    const cfg = parseConfig({ indexer: { overlapChars: -50 } });
+    expect(cfg.indexer.overlapChars).toBe(0);
+  });
+
+  it("parses per-server timeout from mcpServers dict", () => {
+    const cfg = parseConfig({
+      mcpServers: {
+        slow: { command: "uvx", timeout: 120_000 },
+        fast: { command: "npx" },
+      },
+    });
+    expect(cfg.servers.find((s) => s.name === "slow")?.timeout).toBe(120_000);
+    expect(cfg.servers.find((s) => s.name === "fast")?.timeout).toBeUndefined();
+  });
+
+  it("parses per-server timeout from legacy servers", () => {
+    const cfg = parseConfig({
+      servers: [
+        { name: "slow", transport: "stdio", command: "uvx", timeout: 90_000 },
+        { name: "fast", transport: "stdio", command: "npx" },
+      ],
+    });
+    expect(cfg.servers.find((s) => s.name === "slow")?.timeout).toBe(90_000);
+    expect(cfg.servers.find((s) => s.name === "fast")?.timeout).toBeUndefined();
   });
 });
