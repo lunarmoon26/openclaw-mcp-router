@@ -1,7 +1,7 @@
 {
   "id": "openclaw-mcp-router",
   "name": "MCP Router",
-  "description": "Semantic search across MCP tool catalogs. Reduces context bloat from ~77k→8.7k tokens by dynamically surfacing only relevant tools.",
+  "description": "Semantic search across MCP tool catalogs. Reduces context bloat from ~77k\u21928.7k tokens by dynamically surfacing only relevant tools.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -12,14 +12,45 @@
         "additionalProperties": {
           "type": "object",
           "properties": {
-            "command":   { "type": "string" },
-            "args":      { "type": "array", "items": { "type": "string" } },
-            "env":       { "type": "object", "additionalProperties": { "type": "string" } },
-            "url":       { "type": "string" },
-            "serverUrl": { "type": "string" },
-            "type":      { "type": "string", "enum": ["stdio", "sse", "http"] },
-            "headers":   { "type": "object", "additionalProperties": { "type": "string" } },
-            "timeout":   { "type": "number", "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout" }
+            "command": {
+              "type": "string"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "url": {
+              "type": "string"
+            },
+            "serverUrl": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "stdio",
+                "sse",
+                "http"
+              ]
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "timeout": {
+              "type": "number",
+              "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout"
+            }
           }
         }
       },
@@ -32,16 +63,50 @@
         "description": "Legacy server array format. Prefer mcpServers dict.",
         "items": {
           "type": "object",
-          "required": ["name", "transport"],
+          "required": [
+            "name",
+            "transport"
+          ],
           "properties": {
-            "name":      { "type": "string" },
-            "transport": { "type": "string", "enum": ["stdio", "sse", "http"] },
-            "command":   { "type": "string" },
-            "args":      { "type": "array", "items": { "type": "string" } },
-            "env":       { "type": "object", "additionalProperties": { "type": "string" } },
-            "url":       { "type": "string" },
-            "headers":   { "type": "object", "additionalProperties": { "type": "string" } },
-            "timeout":   { "type": "number", "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout" }
+            "name": {
+              "type": "string"
+            },
+            "transport": {
+              "type": "string",
+              "enum": [
+                "stdio",
+                "sse",
+                "http"
+              ]
+            },
+            "command": {
+              "type": "string"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "url": {
+              "type": "string"
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "timeout": {
+              "type": "number",
+              "description": "Per-server connect timeout in ms; overrides indexer.connectTimeout"
+            }
           }
         }
       },
@@ -49,34 +114,119 @@
         "type": "object",
         "description": "Indexer retry and timeout settings",
         "properties": {
-          "connectTimeout":    { "type": "number", "description": "Per-server default connect timeout in ms (default: 60000)" },
-          "maxRetries":        { "type": "number", "minimum": 0, "description": "Retry attempts per server, 0 = no retry (default: 3)" },
-          "initialRetryDelay": { "type": "number", "description": "Initial backoff delay in ms (default: 2000)" },
-          "maxRetryDelay":     { "type": "number", "description": "Max backoff cap in ms (default: 30000)" },
-          "maxChunkChars":     { "type": "number", "minimum": 0, "description": "Max chars per chunk for long tool descriptions. 0 = disable chunking (default: 500)" },
-          "overlapChars":      { "type": "number", "minimum": 0, "description": "Overlap chars between adjacent chunks (default: 100)" }
+          "connectTimeout": {
+            "type": "number",
+            "description": "Per-server default connect timeout in ms (default: 60000)"
+          },
+          "maxRetries": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Retry attempts per server, 0 = no retry (default: 3)"
+          },
+          "initialRetryDelay": {
+            "type": "number",
+            "description": "Initial backoff delay in ms (default: 2000)"
+          },
+          "maxRetryDelay": {
+            "type": "number",
+            "description": "Max backoff cap in ms (default: 30000)"
+          },
+          "maxChunkChars": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Max chars per chunk for long tool descriptions. 0 = disable chunking (default: 500)"
+          },
+          "overlapChars": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Overlap chars between adjacent chunks (default: 100)"
+          }
         }
       },
       "embedding": {
         "type": "object",
         "properties": {
-          "provider": { "type": "string", "enum": ["openai", "gemini", "voyage", "mistral", "ollama"] },
-          "model":    { "type": "string" },
-          "baseUrl":  { "type": "string" },
-          "url":      { "type": "string", "description": "Deprecated: use baseUrl. Old Ollama URL (gets /v1 appended)." },
-          "apiKey":   { "type": "string" },
-          "headers":  { "type": "object", "additionalProperties": { "type": "string" } }
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "gemini",
+              "voyage",
+              "mistral",
+              "ollama"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Deprecated: use baseUrl. Old Ollama URL (gets /v1 appended)."
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
         }
       },
       "vectorDb": {
         "type": "object",
-        "properties": { "path": { "type": "string" } }
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
       },
       "search": {
         "type": "object",
         "properties": {
-          "topK":     { "type": "number", "minimum": 1, "maximum": 20 },
-          "minScore": { "type": "number", "minimum": 0, "maximum": 1 }
+          "topK": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "minScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "callExecution": {
+        "type": "object",
+        "description": "How mcp_call executes tool invocations",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "mcporter-cli"
+            ],
+            "description": "sdk (default) uses MCP SDK directly; mcporter-cli shells out to mcporter call"
+          },
+          "cliCommand": {
+            "type": "string",
+            "description": "Executable for mcporter mode (default: npx)"
+          },
+          "cliArgs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Prefix args before 'call' (default: ['-y','mcporter'])"
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Timeout in ms for mcporter-cli calls (default: 60000)"
+          }
         }
       }
     }

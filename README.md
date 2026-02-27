@@ -107,6 +107,42 @@ For power users, add servers directly to your `plugins.entries`:
 
 ---
 
+
+## 🔌 Optional: CLI-Driven `mcp_call` (MCPorter-inspired)
+
+`openclaw-mcp-router` now supports an optional execution backend for `mcp_call`:
+
+- **`sdk` (default):** call MCP tools through `@modelcontextprotocol/sdk`
+- **`mcporter-cli`:** shell out to [`mcporter`](https://github.com/steipete/mcporter) and execute via CLI
+
+This follows the spirit of Anthropic’s **Code Execution with MCP** guidance: use lightweight tool routing + executable tool calls when it improves reliability and reduces prompt overhead.
+
+Reference: <https://www.anthropic.com/engineering/code-execution-with-mcp>
+
+### Configure call backend
+
+```json5
+{
+  "plugins": {
+    "entries": {
+      "openclaw-mcp-router": {
+        "enabled": true,
+        "config": {
+          "callExecution": {
+            "mode": "mcporter-cli",
+            "cliCommand": "npx",
+            "cliArgs": ["-y", "mcporter"],
+            "timeoutMs": 60000
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+> 🙏 Huge thanks to **@steipete** and the **MCPorter** project for inspiration on the CLI-first calling model.
+
 ## 📈 Performance & Benchmarks
 
 Based on the [Anthropic Tool Search](https://www.anthropic.com/engineering/advanced-tool-use) pattern, dynamic routing can improve tool selection accuracy significantly:

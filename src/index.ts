@@ -184,7 +184,7 @@ const mcpRouterPlugin = {
       { optional: true },
     );
     api.registerTool(
-      createMcpCallTool({ registry, logger: api.logger }),
+      createMcpCallTool({ registry, logger: api.logger, callExecution: cfg.callExecution }),
       { optional: true },
     );
 
