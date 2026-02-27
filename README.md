@@ -152,6 +152,7 @@ PRs welcome — especially around:
 
 PR hygiene:
 - keep README + docs in sync for every behavior/config/workflow change
+- keep `skills/` guidance in sync when user-facing behavior changes
 - run test suite before opening PR
 
 ## License
