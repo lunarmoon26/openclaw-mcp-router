@@ -81,6 +81,8 @@ openclaw openclaw-mcp-router setup
 openclaw openclaw-mcp-router reindex
 ```
 
+The setup wizard auto-detects whether `mcporter` is installed and suggests a sensible default for `mcp_search` schema verbosity.
+
 ---
 
 ## Key configuration

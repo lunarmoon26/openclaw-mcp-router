@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { cancel, confirm, intro, isCancel, outro, select, text } from "@clack/prompts";
 import { parseConfig, type McpServerConfig, type McpTransportKind } from "../config.js";
 import {
@@ -9,6 +10,16 @@ import {
   writeOpenclawConfig,
 } from "./config-writer.js";
 import { CMD_REINDEX, EXTENSION_ID } from "../constants.js";
+
+
+function detectMcporterInstalled(): boolean {
+  try {
+    const r = spawnSync("mcporter", ["--version"], { stdio: "ignore" });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
 
 function abortIfCancel(value: unknown): void {
   if (isCancel(value)) {
@@ -167,7 +178,22 @@ export async function runSetupCommand(): Promise<void> {
     overlapChars = parseInt(rawOverlapChars as string, 10) || 100;
   }
 
-  // Step 4: Write config
+  // Step 4: Search verbosity defaults
+  // First install assumption: no mcporter => include params by default.
+  const hasMcporter = detectMcporterInstalled();
+  const schemaPreference = await confirm({
+    message: hasMcporter
+      ? "mcporter detected. Use compact mcp_search output by default?"
+      : "mcporter not detected. Keep full params in mcp_search by default?",
+    initialValue: true,
+  });
+  abortIfCancel(schemaPreference);
+
+  const includeParametersDefault = hasMcporter
+    ? !Boolean(schemaPreference)
+    : Boolean(schemaPreference);
+
+  // Step 5: Write config
   // Build mcpServers dict (key = server name, value = entry without name field)
   const mcpServers: Record<string, unknown> = {};
   for (const srv of servers) {
@@ -181,7 +207,7 @@ export async function runSetupCommand(): Promise<void> {
       model: embeddingModel,
       url: ollamaUrl as string,
     },
-    search: { topK, minScore },
+    search: { topK, minScore, includeParametersDefault },
     indexer: { maxChunkChars, overlapChars },
   };
 
