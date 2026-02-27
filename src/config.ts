@@ -58,7 +58,7 @@ export type McpRouterConfig = {
   servers: McpServerConfig[];
   embedding: EmbeddingConfig;
   vectorDb: { path: string };
-  search: { topK: number; minScore: number };
+  search: { topK: number; minScore: number; includeParametersDefault: boolean };
   indexer: IndexerConfig;
   callExecution: CallExecutionConfig;
 };
@@ -368,6 +368,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   const search = {
     topK: typeof srchRaw.topK === "number" ? Math.min(20, Math.max(1, srchRaw.topK)) : 5,
     minScore: typeof srchRaw.minScore === "number" ? srchRaw.minScore : 0.3,
+    includeParametersDefault: typeof srchRaw.includeParametersDefault === "boolean" ? srchRaw.includeParametersDefault : false,
   };
 
   // ── indexer defaults ──

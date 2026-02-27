@@ -14,8 +14,12 @@ Modern MCP catalogs are growing. Loading every tool schema upfront is expensive 
 
 Instead of a full schema dump, this plugin registers two lightweight "Meta-Tools":
 
-1. **`mcp_search(query)`**: Uses **Ollama** and **LanceDB** to perform a semantic search. It returns only the top-N most relevant tool definitions (reducing overhead by ~95%).
-2. **`mcp_call(tool_name, params)`**: Dynamically resolves the owning MCP server and executes the call.
+1. **`mcp_search(query)`**: Uses **Ollama** and **LanceDB** to perform semantic search. By default it returns compact cards (description + signature + CLI hint) to reduce token cost; set `include_schema=true` when full JSON schema is needed.
+2. **`mcp_call(tool_name, params)`**: JSON fallback path that dynamically resolves the owning MCP server and executes the call.
+
+Preferred execution flow when available:
+- Try CLI-style invocation first: `mcporter call <server>.<tool> ...`
+- Fall back to `mcp_call` for classic JSON tool calls
 
 > **Result:** Your agent "asks" for the tools it needs, keeping the context window clean and the reasoning sharp.
 

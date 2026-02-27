@@ -197,6 +197,10 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          },
+          "includeParametersDefault": {
+            "type": "boolean",
+            "description": "Include full input schema by default in mcp_search results (default: false)"
           }
         }
       },

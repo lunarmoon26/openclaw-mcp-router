@@ -117,7 +117,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       cfg: { topK: 5, minScore: 0.3 },
     });
 
-    const result = await tool.execute("id", { query: "test" });
+    const result = await tool.execute("id", { query: "test", include_schema: true });
     expect((result.content[0] as { text: string }).text).toContain("truncated");
   });
 
