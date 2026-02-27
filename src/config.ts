@@ -41,6 +41,8 @@ export type IndexerConfig = {
   maxChunkChars: number;
   /** Overlap characters between adjacent chunks (default: 100) */
   overlapChars: number;
+  /** Generate mcporter CLI artifacts during reindex (default: false). */
+  generateCliArtifacts: boolean;
 };
 
 export type CallExecutionConfig = {
@@ -380,6 +382,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     maxRetryDelay: typeof idxRaw.maxRetryDelay === "number" ? idxRaw.maxRetryDelay : 30_000,
     maxChunkChars: typeof idxRaw.maxChunkChars === "number" ? Math.max(0, idxRaw.maxChunkChars) : 500,
     overlapChars: typeof idxRaw.overlapChars === "number" ? Math.max(0, idxRaw.overlapChars) : 100,
+    generateCliArtifacts: typeof idxRaw.generateCliArtifacts === "boolean" ? idxRaw.generateCliArtifacts : false,
   };
 
   // ── call execution defaults ──

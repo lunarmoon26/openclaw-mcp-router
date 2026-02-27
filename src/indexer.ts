@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import type { Embeddings } from "./embeddings.js";
 import type { McpRegistry } from "./mcp-registry.js";
 import { McpClient } from "./mcp-client.js";
@@ -45,6 +48,49 @@ export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> 
     }
 
     signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+
+async function generateCliForServer(params: {
+  serverCfg: McpServerConfig;
+  cfg: McpRouterConfig;
+  logger: IndexerLogger;
+}): Promise<void> {
+  const { serverCfg, cfg, logger } = params;
+  // Best-effort CLI artifact generation inspired by mcporter.
+  // Stores generated artifacts alongside router state.
+  const outDir = path.join(path.dirname(cfg.vectorDb.path), "generated-clis");
+  const outFile = path.join(outDir, `${serverCfg.name}.ts`);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const args = ["-y", "mcporter", "generate-cli"];
+  if (serverCfg.transport === "stdio") {
+    if (!serverCfg.command) return;
+    const cmd = [serverCfg.command, ...(serverCfg.args ?? [])].join(" ");
+    args.push("--command", cmd);
+  } else if (serverCfg.url) {
+    args.push("--server", serverCfg.url);
+  } else {
+    return;
+  }
+
+  args.push("--name", serverCfg.name, "--output", outFile);
+
+  await new Promise<void>((resolve) => {
+    const child = spawn("npx", args, { stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    let stderr = "";
+    child.stderr.on("data", (d) => (stderr += String(d)));
+    child.on("close", (code) => {
+      if (code === 0) {
+        logger.info(`${EXTENSION_ID}: generated CLI artifact for server "${serverCfg.name}" at ${outFile}`);
+      } else {
+        logger.warn(
+          `${EXTENSION_ID}: failed to generate CLI artifact for "${serverCfg.name}" (best-effort): ${stderr.trim() || `exit ${String(code)}`}`,
+        );
+      }
+      resolve();
+    });
   });
 }
 
@@ -130,6 +176,12 @@ async function indexServer(params: {
       const connectTimeout = serverCfg.timeout ?? indexer.connectTimeout;
       await client.connect({ signal, timeout: connectTimeout });
       const tools = await client.listTools();
+
+      // Optional: best-effort generation of per-server CLI wrapper via mcporter.
+      // Indexing continues even if generation fails.
+      if (cfg.indexer.generateCliArtifacts) {
+        await generateCliForServer({ serverCfg, cfg, logger });
+      }
 
       let indexed = 0;
       let failed = 0;

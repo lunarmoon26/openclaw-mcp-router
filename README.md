@@ -137,6 +137,12 @@ Reference: <https://www.anthropic.com/engineering/code-execution-with-mcp>
             "cliCommand": "npx",
             "cliArgs": ["-y", "mcporter"],
             "timeoutMs": 60000
+          },
+          "indexer": {
+            "generateCliArtifacts": true
+          },
+          "search": {
+            "includeParametersDefault": false
           }
         }
       }
@@ -144,6 +150,8 @@ Reference: <https://www.anthropic.com/engineering/code-execution-with-mcp>
   }
 }
 ```
+
+When `indexer.generateCliArtifacts=true`, each reindex run attempts to generate per-server CLI wrappers via `mcporter generate-cli` (best-effort, non-blocking).
 
 > 🙏 Huge thanks to **@steipete** and the **MCPorter** project for inspiration on the CLI-first calling model.
 

@@ -540,6 +540,7 @@ describe("parseConfig", () => {
       maxRetryDelay: 30_000,
       maxChunkChars: 500,
       overlapChars: 100,
+      generateCliArtifacts: false,
     });
   });
 
@@ -561,6 +562,7 @@ describe("parseConfig", () => {
       maxRetryDelay: 15_000,
       maxChunkChars: 4000,
       overlapChars: 400,
+      generateCliArtifacts: false,
     });
   });
 

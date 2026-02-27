@@ -140,6 +140,10 @@
             "type": "number",
             "minimum": 0,
             "description": "Overlap chars between adjacent chunks (default: 100)"
+          },
+          "generateCliArtifacts": {
+            "type": "boolean",
+            "description": "Generate mcporter CLI artifacts during reindex (default: false)"
           }
         }
       },
