@@ -193,11 +193,11 @@ const mcpRouterPlugin = {
     const hasMcporter = detectMcporterInstalled();
 
     api.registerTool(
-      createMcpSearchTool({ store, embeddings, cfg: cfg.search, hasMcporter }),
+      createMcpSearchTool({ store, embeddings, cfg: cfg.search, hasMcporter }) as never,
       { optional: true },
     );
     api.registerTool(
-      createMcpCallTool({ registry, logger: api.logger }),
+      createMcpCallTool({ registry, logger: api.logger }) as never,
       { optional: true },
     );
 
