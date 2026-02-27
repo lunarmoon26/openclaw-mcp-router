@@ -19,7 +19,7 @@ const mockCfg: McpRouterConfig = {
   embedding: { provider: "ollama", model: "embeddinggemma", baseUrl: "http://localhost:11434/v1" },
   vectorDb: { path: "/tmp/test-lancedb" },
   search: { topK: 5, minScore: 0.3 },
-  indexer: { connectTimeout: 60_000, maxRetries: 3, initialRetryDelay: 2_000, maxRetryDelay: 30_000, maxChunkChars: 500, overlapChars: 100 },
+  indexer: { connectTimeout: 60_000, maxRetries: 3, initialRetryDelay: 2_000, maxRetryDelay: 30_000, maxChunkChars: 500, overlapChars: 100, generateCliArtifacts: false },
 };
 
 function makeStore() {

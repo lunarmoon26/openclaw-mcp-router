@@ -21,12 +21,22 @@ If a relevant tool exists, use it with `mcp_call`.
    - Use an action-oriented query: `"create github pull request"`, `"query postgres"`, `"send slack message"`.
 2. **Select tool**
    - Prefer best intent match + feasible required params.
-3. **Read schema**
-   - Identify required fields, types, enums, nested structure.
-4. **Call tool**
-   - `mcp_call("exact_tool_name", "{...valid JSON...}")`
+3. **Decide execution path**
+   - If `mcporter` is available, prefer CLI invocation style shown in search hints.
+   - Otherwise, use `mcp_call` with JSON params.
+4. **Read schema when needed**
+   - Use `include_schema=true` on `mcp_search` when full parameter detail is required.
 5. **Recover on failure**
    - Fix schema/type mismatch or re-search with rewritten query.
+
+## Adaptive `mcp_search` Defaults
+
+- Default schema verbosity can be auto-configured by environment:
+  - `mcporter` installed → compact search cards by default
+  - `mcporter` not installed → include parameter schema by default
+- Overrides:
+  - Per call: `include_schema=true|false`
+  - Config: `search.includeParametersDefault=true|false`
 
 ## Query Rewrite Ladder (Deterministic)
 
@@ -50,7 +60,7 @@ When multiple tools match, rank by:
 
 ## `mcp_call` Parameter Checklist
 
-`params_json` must be a **JSON string**.
+`mcp_call` is the classic MCP JSON meta-tool. `params_json` must be a **JSON string**.
 
 - Include all required fields.
 - Match exact types (`42` vs `"42"`, `true` vs `"true"`).

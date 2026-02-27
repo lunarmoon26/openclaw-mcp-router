@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { parseConfig } from "./config.js";
@@ -9,6 +10,16 @@ import { McpRegistry } from "./mcp-registry.js";
 import { createMcpCallTool } from "./tools/mcp-call-tool.js";
 import { createMcpSearchTool } from "./tools/mcp-search-tool.js";
 import { McpToolVectorStore } from "./vector-store.js";
+
+
+function detectMcporterInstalled(): boolean {
+  try {
+    const r = spawnSync("mcporter", ["--version"], { stdio: "ignore" });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
 
 const mcpRouterPlugin = {
   id: EXTENSION_ID,
@@ -179,12 +190,14 @@ const mcpRouterPlugin = {
     }
 
     // Register tools as optional so the agent only sees them when alsoAllow is set
+    const hasMcporter = detectMcporterInstalled();
+
     api.registerTool(
-      createMcpSearchTool({ store, embeddings, cfg: cfg.search }),
+      createMcpSearchTool({ store, embeddings, cfg: cfg.search, hasMcporter }) as never,
       { optional: true },
     );
     api.registerTool(
-      createMcpCallTool({ registry, logger: api.logger }),
+      createMcpCallTool({ registry, logger: api.logger }) as never,
       { optional: true },
     );
 

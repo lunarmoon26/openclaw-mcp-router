@@ -41,13 +41,16 @@ export type IndexerConfig = {
   maxChunkChars: number;
   /** Overlap characters between adjacent chunks (default: 100) */
   overlapChars: number;
+  /** Generate mcporter CLI artifacts during reindex (default: false). */
+  generateCliArtifacts: boolean;
 };
+
 
 export type McpRouterConfig = {
   servers: McpServerConfig[];
   embedding: EmbeddingConfig;
   vectorDb: { path: string };
-  search: { topK: number; minScore: number };
+  search: { topK: number; minScore: number; includeParametersDefault?: boolean };
   indexer: IndexerConfig;
 };
 
@@ -356,6 +359,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   const search = {
     topK: typeof srchRaw.topK === "number" ? Math.min(20, Math.max(1, srchRaw.topK)) : 5,
     minScore: typeof srchRaw.minScore === "number" ? srchRaw.minScore : 0.3,
+    includeParametersDefault: typeof srchRaw.includeParametersDefault === "boolean" ? srchRaw.includeParametersDefault : undefined,
   };
 
   // ── indexer defaults ──
@@ -367,6 +371,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     maxRetryDelay: typeof idxRaw.maxRetryDelay === "number" ? idxRaw.maxRetryDelay : 30_000,
     maxChunkChars: typeof idxRaw.maxChunkChars === "number" ? Math.max(0, idxRaw.maxChunkChars) : 500,
     overlapChars: typeof idxRaw.overlapChars === "number" ? Math.max(0, idxRaw.overlapChars) : 100,
+    generateCliArtifacts: typeof idxRaw.generateCliArtifacts === "boolean" ? idxRaw.generateCliArtifacts : false,
   };
 
   return { servers, embedding, vectorDb, search, indexer };

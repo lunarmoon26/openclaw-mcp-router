@@ -23,6 +23,7 @@ function makeTool(storeResults = makeStore()) {
     store: storeResults as never,
     embeddings: makeEmbeddings() as never,
     cfg: { topK: 5, minScore: 0.3 },
+    hasMcporter: false,
   });
 }
 
@@ -43,6 +44,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     const result = await tool.execute("id", { query: "list files" });
@@ -69,6 +71,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     const result = await tool.execute("id", { query: "read file" });
@@ -84,6 +87,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     await tool.execute("id", { query: "test", limit: 999 });
@@ -115,9 +119,10 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
-    const result = await tool.execute("id", { query: "test" });
+    const result = await tool.execute("id", { query: "test", include_schema: true });
     expect((result.content[0] as { text: string }).text).toContain("truncated");
   });
 
@@ -127,6 +132,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     await tool.execute("id", { query: "test", limit: 10 });
@@ -140,6 +146,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     await tool.execute("id", { query: "test", limit: 999 });
@@ -188,6 +195,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: store as never,
       embeddings: makeEmbeddings() as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     const result = await tool.execute("id", { query: "read file" });
@@ -209,6 +217,7 @@ describe(`${TOOL_MCP_SEARCH} tool`, () => {
       store: makeStore() as never,
       embeddings: embeddings as never,
       cfg: { topK: 5, minScore: 0.3 },
+      hasMcporter: false,
     });
 
     const result = await tool.execute("id", { query: "files" });

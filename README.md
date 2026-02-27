@@ -1,129 +1,160 @@
 # OpenClaw MCP Router 🚀
 
-**OpenClaw MCP Router** is a dynamic tool discovery layer for [OpenClaw](https://openclaw.ai). It uses semantic vector search to eliminate **Context Bloat** by routing only the necessary Model Context Protocol (MCP) tool schemas to your agent on-demand.
+OpenClaw MCP Router is an OpenClaw plugin that keeps MCP tool catalogs out of the system prompt until needed.
 
-## ⚡ The Problem: Context Window Exhaustion
+Instead of injecting every MCP schema up front, it provides two lightweight meta-tools:
 
-Modern MCP catalogs are growing. Loading every tool schema upfront is expensive and inefficient:
+- `mcp_search` → discover the right tool at runtime
+- `mcp_call` → execute as JSON fallback
 
-* **Token Waste:** 5 MCP servers with 50+ tools can burn **55k–134k tokens** before your agent even says "Hello."
-* **Performance Hit:** Massive system prompts degrade reasoning accuracy (the "lost in the middle" phenomenon).
-* **Cost:** High token usage leads to higher API costs for every turn of the conversation.
-
-## 🛠️ The Solution: Semantic Tool Routing
-
-Instead of a full schema dump, this plugin registers two lightweight "Meta-Tools":
-
-1. **`mcp_search(query)`**: Uses **Ollama** and **LanceDB** to perform a semantic search. It returns only the top-N most relevant tool definitions (reducing overhead by ~95%).
-2. **`mcp_call(tool_name, params)`**: Dynamically resolves the owning MCP server and executes the call.
-
-> **Result:** Your agent "asks" for the tools it needs, keeping the context window clean and the reasoning sharp.
+This cuts context bloat and improves tool selection quality on large MCP catalogs.
 
 ---
 
-## 🚀 Quick Start
+## Why this exists
 
-### 1. Prerequisites
+Large MCP catalogs are expensive in prompt space.
 
-Ensure you have **Ollama** running locally with an embedding model:
+- **Token waste:** tens of thousands of tokens before first user turn
+- **Reasoning quality loss:** "lost in the middle" on oversized prompts
+- **Higher cost:** more prompt tokens every turn
+
+MCP Router applies Anthropic's tool-search pattern so only relevant tools are surfaced when needed.
+
+Refs:
+- Tool search / advanced tool use: <https://www.anthropic.com/engineering/advanced-tool-use>
+- Code execution with MCP: <https://www.anthropic.com/engineering/code-execution-with-mcp>
+
+---
+
+## Core model
+
+### 1) Index time (`reindex`)
+- Connect to configured MCP servers
+- List tools
+- Embed tool text
+- Store vectors in LanceDB
+- Register tool→server ownership
+- *(Optional)* generate CLI artifacts via `mcporter generate-cli`
+
+### 2) Runtime (`mcp_search`)
+- Semantic search over indexed tools
+- Default schema verbosity is adaptive:
+  - if `mcporter` is available: compact cards by default
+  - if `mcporter` is not available: include JSON params by default
+- Full JSON schema can always be forced with `include_schema=true`
+
+### 3) Execute (`mcp_call`)
+- JSON-based execution path (classic MCP params flow)
+
+---
+
+## CLI-first behavior (new)
+
+Router is now optimized for a CLI-first workflow:
+
+- Prefer: `mcporter call <server>.<tool> ...`
+- Fallback: `mcp_call(tool_name, params_json)`
+
+`mcp_search` adapts to environment: compact when mcporter is present, schema-forward when it is not (so agents can drive `mcp_call` reliably).
+
+---
+
+## Quick start
+
+### Prerequisites
 
 ```bash
 ollama pull embeddinggemma
-
 ```
 
-### 2. Installation
+### Install
 
 ```bash
 openclaw plugins install openclaw-mcp-router
-
 ```
 
-### 3. Setup & Indexing
-
-Run the interactive wizard to configure your servers and automatically update your `alsoAllow` permissions:
+### Setup + index
 
 ```bash
 openclaw openclaw-mcp-router setup
 openclaw openclaw-mcp-router reindex
-
 ```
+
+The setup wizard auto-detects whether `mcporter` is installed and suggests a sensible default for `mcp_search` schema verbosity.
 
 ---
 
-## ⚙️ Configuration
+## Key configuration
 
-The plugin is highly configurable via `~/.openclaw/openclaw.json`.
+In `~/.openclaw/openclaw.json` under `plugins.entries.openclaw-mcp-router.config`:
 
-### Server Management
+```json5
+{
+  "search": {
+    "topK": 5,
+    "minScore": 0.3
+    // includeParametersDefault optional:
+    // true  -> always include params
+    // false -> always compact
+    // unset -> auto (based on mcporter availability)
+  },
+  "indexer": {
+    "connectTimeout": 60000,
+    "maxRetries": 3,
+    "initialRetryDelay": 2000,
+    "maxRetryDelay": 30000,
+    "maxChunkChars": 500,
+    "overlapChars": 100,
+    "generateCliArtifacts": false
+  }
+}
+```
 
-You can manage servers via the **Interactive TUI**:
+### Notes
+
+- `search.includeParametersDefault` is optional; if omitted, router auto-decides based on mcporter availability.
+- `indexer.generateCliArtifacts=true` enables best-effort per-server `mcporter generate-cli` during reindex.
+- `mcp_call` stays the classic JSON meta-tool (no backend mode flag).
+
+---
+
+## Server management
 
 ```bash
 openclaw openclaw-mcp-router control
-
-```
-
-### Manual Schema Example
-
-For power users, add servers directly to your `plugins.entries`:
-
-| Key | Description | Default |
-| --- | --- | --- |
-| `topK` | Number of tools returned per search | `5` |
-| `minScore` | Similarity threshold (0.0 - 1.0) | `0.3` |
-| `maxRetries` | Connection attempts for slow servers | `3` |
-
-```json5
-// ~/.openclaw/openclaw.json
-{
-  "plugins": {
-    "entries": {
-      "openclaw-mcp-router": {
-        "enabled": true,
-        "config": {
-          "servers": [{ "name": "filesystem", "transport": "stdio", "command": "npx", "args": ["..."] }],
-          "embedding": { "provider": "ollama", "model": "embeddinggemma" }
-        }
-      }
-    }
-  }
-}
-
+openclaw openclaw-mcp-router list
+openclaw openclaw-mcp-router add <name> <command-or-url> [...]
+openclaw openclaw-mcp-router reindex
 ```
 
 ---
 
-## 🧠 How It Works: Under the Hood
+## MCPorter inspiration
 
-1. **Indexing:** During `reindex`, the router connects to all configured MCP servers, fetches their manifests, and generates vector embeddings for every tool description.
-2. **Storage:** These embeddings are stored in a local **LanceDB** instance for sub-millisecond retrieval.
-3. **Runtime Discovery:** * Agent detects a task (e.g., "Analyze this CSV").
-* Agent calls `mcp_search("read or analyze csv files")`.
-* Router returns the `filesystem` tool schema.
-* Agent executes the tool via `mcp_call`.
-
-
+Huge thanks to **@steipete** and [mcporter](https://github.com/steipete/mcporter) for the CLI-first MCP execution model inspiration.
 
 ---
 
-## 📈 Performance & Benchmarks
+## Documentation
 
-Based on the [Anthropic Tool Search](https://www.anthropic.com/engineering/advanced-tool-use) pattern, dynamic routing can improve tool selection accuracy significantly:
-
-* **Standard Loading:** ~49% Accuracy (Large catalogs)
-* **Dynamic Routing:** **~88% Accuracy** (Opus 4.5 benchmarks)
+- Architecture + flow details: `docs/CLI_FIRST_WORKFLOW.md`
+- Plugin config schema: `openclaw.plugin.json`
+- Skill usage examples: `skills/mcp-router/`
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-We are looking to implement **Hybrid Search (BM25)** and **LLM-based Reranking**. If you're interested in improving LLM orchestration efficiency, we'd love your help!
+PRs welcome — especially around:
+- better reranking
+- hybrid retrieval (vector + lexical)
 
-1. Fork the repo.
-2. Create your feature branch.
-3. Submit a PR.
+PR hygiene:
+- keep README + docs in sync for every behavior/config/workflow change
+- keep `skills/` guidance in sync when user-facing behavior changes
+- run test suite before opening PR
 
-## 📄 License
+## License
 
-Released under the [MIT License](https://www.google.com/search?q=LICENSE).
+MIT
