@@ -150,6 +150,10 @@ PRs welcome — especially around:
 - better reranking
 - hybrid retrieval (vector + lexical)
 
+PR hygiene:
+- keep README + docs in sync for every behavior/config/workflow change
+- run test suite before opening PR
+
 ## License
 
 MIT
