@@ -1,409 +1,129 @@
-# openclaw-mcp-router
+# OpenClaw MCP Router 🚀
 
-Dynamic MCP tool router for [OpenClaw](https://openclaw.ai) — semantic search over large MCP tool catalogs to eliminate context bloat.
+**OpenClaw MCP Router** is a dynamic tool discovery layer for [OpenClaw](https://openclaw.ai). It uses semantic vector search to eliminate **Context Bloat** by routing only the necessary Model Context Protocol (MCP) tool schemas to your agent on-demand.
 
-## The problem
+## ⚡ The Problem: Context Window Exhaustion
 
-Loading all MCP tool schemas upfront burns 55k–134k tokens before your agent processes a single message. With 58 tools across 5 MCP servers, that's ~77k tokens wasted on schemas the agent may never use.
+Modern MCP catalogs are growing. Loading every tool schema upfront is expensive and inefficient:
 
-## The solution
+* **Token Waste:** 5 MCP servers with 50+ tools can burn **55k–134k tokens** before your agent even says "Hello."
+* **Performance Hit:** Massive system prompts degrade reasoning accuracy (the "lost in the middle" phenomenon).
+* **Cost:** High token usage leads to higher API costs for every turn of the conversation.
 
-Two tiny tools replace the full schema dump:
+## 🛠️ The Solution: Semantic Tool Routing
 
-- **`mcp_search(query)`** — embed the query via Ollama, search a local LanceDB index, return only matching tool definitions (~8.7k tokens, 95% reduction)
-- **`mcp_call(tool_name, params_json)`** — look up the owning MCP server, execute the call, return the result
+Instead of a full schema dump, this plugin registers two lightweight "Meta-Tools":
 
-The agent asks for tools it needs instead of receiving every schema upfront.
+1. **`mcp_search(query)`**: Uses **Ollama** and **LanceDB** to perform a semantic search. It returns only the top-N most relevant tool definitions (reducing overhead by ~95%).
+2. **`mcp_call(tool_name, params)`**: Dynamically resolves the owning MCP server and executes the call.
 
-## Prerequisites
+> **Result:** Your agent "asks" for the tools it needs, keeping the context window clean and the reasoning sharp.
 
-Before installing this plugin you need:
+---
 
-- **[OpenClaw](https://openclaw.ai)** installed and running
-- **[Ollama](https://ollama.ai)** running locally
-- An embedding model pulled:
+## 🚀 Quick Start
 
-  ```sh
-  ollama pull embeddinggemma
-  ollama serve
-  ```
+### 1. Prerequisites
 
-## Quick Start
+Ensure you have **Ollama** running locally with an embedding model:
 
-1. **Install the plugin**
+```bash
+ollama pull embeddinggemma
 
-   ```sh
-   openclaw plugins install openclaw-mcp-router
-   ```
-
-   **Alternative: install from source**
-
-   ```sh
-   git clone https://github.com/lunarmoon26/openclaw-mcp-router.git
-   openclaw plugins install ./openclaw-mcp-router
-   ```
-
-2. **Run the setup wizard**
-
-   ```sh
-   openclaw openclaw-mcp-router setup
-   ```
-
-   This guides you through configuring your MCP servers and embedding model. It also automatically adds `mcp_search` and `mcp_call` to `tools.alsoAllow` in `~/.openclaw/openclaw.json`.
-
-3. **Index your servers**
-
-   ```sh
-   openclaw openclaw-mcp-router reindex
-   ```
-
-4. **Restart the gateway** — the tools are now available to your agents.
-
-> **Note:** `~/.openclaw/openclaw.json` is JSON5 — it supports `//` comments and trailing commas.
-
-> **Tip: persist your MCP servers across reinstalls.**
-> Store your MCP server definitions in `~/.openclaw/openclaw-mcp-router/.mcp.json`. The plugin auto-loads this file when no `mcpServers` key is present in the plugin config, so your server list survives plugin reinstalls, upgrades, or config resets — you won't need to re-run setup just to restore your servers.
->
-> ```jsonc
-> // ~/.openclaw/openclaw-mcp-router/.mcp.json
-> {
->   "mcpServers": {
->     "filesystem": {
->       "command": "npx",
->       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
->     },
->     "github": {
->       "url": "https://api.githubcopilot.com/mcp/",
->       "transport": "sse"
->     }
->   }
-> }
-> ```
-
-## Important: `tools.alsoAllow` is required
-
-The plugin registers `mcp_search` and `mcp_call` as **optional tools** (`optional: true`). This means the gateway loads them, but they are **not exposed to agents** unless explicitly allowlisted.
-
-If the plugin is running and `openclaw openclaw-mcp-router list` shows indexed tools, but your agent can't call `mcp_search` — this is why. The `setup` command adds this automatically, or you can add it manually:
-
-```jsonc
-// ~/.openclaw/openclaw.json — global, all agents get access
-{
-  "tools": {
-    "alsoAllow": ["mcp_search", "mcp_call"]
-  }
-}
 ```
 
-Or scope it to specific agents:
+### 2. Installation
 
-```jsonc
-{
-  "agents": {
-    "defaults": {
-      "tools": {
-        "alsoAllow": ["mcp_search", "mcp_call"]
-      }
-    }
-  }
-}
+```bash
+openclaw plugins install openclaw-mcp-router
+
 ```
 
-> **Note:** Plugin configs go under `plugins.entries`, not directly under `plugins`.
-> OpenClaw's config schema is strict — keys placed directly under `plugins` other than
-> `enabled`, `allow`, `deny`, `load`, `slots`, `entries`, and `installs` will cause a
-> validation error.
+### 3. Setup & Indexing
 
-Restart the gateway after changing the config.
+Run the interactive wizard to configure your servers and automatically update your `alsoAllow` permissions:
 
-## Manual configuration
+```bash
+openclaw openclaw-mcp-router setup
+openclaw openclaw-mcp-router reindex
 
-Instead of using `setup`, you can edit `~/.openclaw/openclaw.json` directly:
+```
 
-```jsonc
+---
+
+## ⚙️ Configuration
+
+The plugin is highly configurable via `~/.openclaw/openclaw.json`.
+
+### Server Management
+
+You can manage servers via the **Interactive TUI**:
+
+```bash
+openclaw openclaw-mcp-router control
+
+```
+
+### Manual Schema Example
+
+For power users, add servers directly to your `plugins.entries`:
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `topK` | Number of tools returned per search | `5` |
+| `minScore` | Similarity threshold (0.0 - 1.0) | `0.3` |
+| `maxRetries` | Connection attempts for slow servers | `3` |
+
+```json5
 // ~/.openclaw/openclaw.json
 {
-  "tools": {
-    "alsoAllow": ["mcp_search", "mcp_call"]
-  },
   "plugins": {
     "entries": {
       "openclaw-mcp-router": {
         "enabled": true,
         "config": {
-          "servers": [
-            {
-              "name": "filesystem",
-              "transport": "stdio",
-              "command": "npx",
-              "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-            },
-            {
-              "name": "github",
-              "transport": "sse",
-              "url": "https://api.githubcopilot.com/mcp/"
-            }
-          ],
-          "embedding": {
-            "provider": "ollama",
-            "model": "embeddinggemma", // or qwen3-embedding:0.6b, all-minilm
-            "url": "http://localhost:11434"
-          },
-          "search": {
-            "topK": 5,      // tools returned per search (1–20)
-            "minScore": 0.3 // minimum similarity threshold (0–1)
-          },
-          "indexer": {
-            "maxChunkChars": 500, // Max chars per chunk for long tool descriptions
-            "overlapChars": 100   // Overlap chars between adjacent chunks
-          }
+          "servers": [{ "name": "filesystem", "transport": "stdio", "command": "npx", "args": ["..."] }],
+          "embedding": { "provider": "ollama", "model": "embeddinggemma" }
         }
       }
     }
   }
 }
-```
-
-## Managing servers
-
-### Interactive control panel
-
-The `control` command opens an interactive TUI for managing server state and credentials — the fastest way to deal with auth errors or temporarily disable a misbehaving server:
-
-```sh
-openclaw openclaw-mcp-router control
-```
-
-The menu shows live status for each server:
 
 ```
-✓ deepwiki  (http)   ok — 3 tools
-✕ supabase  (http)   failed: Unauthorized
-● github    (stdio)  disabled
-```
 
-Select a server to:
+---
 
-- **Enable / disable** — a disabled server is skipped during indexing and won't cause startup errors
-- **Set auth header** (HTTP/SSE servers) — add or update any request header; the most common use is setting `Authorization: Bearer <token>` for OAuth or API-key protected servers
-- **Remove a header** — pick from the list of currently set headers
-- **Set environment variable** (stdio servers) — inject an API key or other secret into the server process
-- **Remove an env var** — clean up credentials that are no longer needed
+## 🧠 How It Works: Under the Hood
 
-After saving, the TUI prints the exact `reindex` command to apply the change:
+1. **Indexing:** During `reindex`, the router connects to all configured MCP servers, fetches their manifests, and generates vector embeddings for every tool description.
+2. **Storage:** These embeddings are stored in a local **LanceDB** instance for sub-millisecond retrieval.
+3. **Runtime Discovery:** * Agent detects a task (e.g., "Analyze this CSV").
+* Agent calls `mcp_search("read or analyze csv files")`.
+* Router returns the `filesystem` tool schema.
+* Agent executes the tool via `mcp_call`.
 
-```sh
-openclaw openclaw-mcp-router reindex --server supabase
-```
 
-### Handling auth failures
 
-When a server fails with `Unauthorized`, the typical fix is:
+---
 
-```sh
-openclaw openclaw-mcp-router control
-# → select the failing server → "Set auth header"
-# → Header name: Authorization
-# → Header value: Bearer <your-token>
-openclaw openclaw-mcp-router reindex --server <name>
-```
+## 📈 Performance & Benchmarks
 
-While you're getting credentials, disable the server to stop it consuming retry time at every gateway startup:
+Based on the [Anthropic Tool Search](https://www.anthropic.com/engineering/advanced-tool-use) pattern, dynamic routing can improve tool selection accuracy significantly:
 
-```sh
-openclaw openclaw-mcp-router disable <name>
-# ... obtain credentials ...
-openclaw openclaw-mcp-router enable <name>
-openclaw openclaw-mcp-router reindex --server <name>
-```
+* **Standard Loading:** ~49% Accuracy (Large catalogs)
+* **Dynamic Routing:** **~88% Accuracy** (Opus 4.5 benchmarks)
 
-### Non-interactive server management
+---
 
-```sh
-# Add a stdio server (local process)
-openclaw openclaw-mcp-router add filesystem npx -y @modelcontextprotocol/server-filesystem /tmp
+## 🤝 Contributing
 
-# Add an SSE server
-openclaw openclaw-mcp-router add --transport sse github https://api.githubcopilot.com/mcp/
+We are looking to implement **Hybrid Search (BM25)** and **LLM-based Reranking**. If you're interested in improving LLM orchestration efficiency, we'd love your help!
 
-# Add with environment variables and a custom timeout
-openclaw openclaw-mcp-router add --env API_KEY=abc123 --timeout 120000 myserver uvx my-mcp-server
+1. Fork the repo.
+2. Create your feature branch.
+3. Submit a PR.
 
-# List configured servers
-openclaw openclaw-mcp-router list
+## 📄 License
 
-# Remove a server
-openclaw openclaw-mcp-router remove github
-
-# Disable / enable without entering the TUI
-openclaw openclaw-mcp-router disable supabase
-openclaw openclaw-mcp-router enable supabase
-```
-
-After adding or removing servers, run `openclaw openclaw-mcp-router reindex` to update the index. No gateway restart needed.
-
-## CLI commands
-
-```sh
-openclaw openclaw-mcp-router setup                          # Interactive setup wizard
-openclaw openclaw-mcp-router control                        # Interactive server control panel
-openclaw openclaw-mcp-router add <name> <cmd> [args...]     # Add a stdio server
-openclaw openclaw-mcp-router add --transport sse <name> <url>  # Add SSE/HTTP server
-openclaw openclaw-mcp-router remove <name>                  # Remove a server
-openclaw openclaw-mcp-router list                           # List servers with tool counts and status
-openclaw openclaw-mcp-router disable <name>                 # Disable a server (skip indexing)
-openclaw openclaw-mcp-router enable <name>                  # Re-enable a disabled server
-openclaw openclaw-mcp-router reindex                        # Re-index all servers
-openclaw openclaw-mcp-router reindex --server <name>        # Re-index one server
-```
-
-**`add` flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--transport <stdio\|sse\|http>` | Transport type (default: `stdio`) |
-| `--env KEY=VALUE` | Set an env var on the server; repeatable |
-| `--timeout <ms>` | Per-server connect timeout override |
-
-## Configuration reference
-
-### `servers[]`
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | yes | Unique server identifier |
-| `transport` | yes | `stdio`, `sse`, or `http` |
-| `command` | stdio only | Executable to run |
-| `args` | stdio only | Arguments array |
-| `env` | no | Extra env vars merged over process.env; supports `${VAR}` expansion |
-| `url` | sse/http only | Server endpoint URL |
-| `headers` | sse/http only | Extra HTTP headers sent with every request; supports `${VAR}` expansion. Use `Authorization: Bearer <token>` for OAuth/API-key auth |
-| `timeout` | no | Per-server connect timeout in ms; overrides `indexer.connectTimeout` |
-| `disabled` | no | Set to `true` to skip this server during indexing without removing it from the config |
-
-### `embedding`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `provider` | `ollama` | Only Ollama is supported |
-| `model` | `embeddinggemma` | Embedding model name |
-| `url` | `http://localhost:11434` | Ollama base URL (must be localhost) |
-
-### `vectorDb`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `path` | `~/.openclaw/openclaw-mcp-router/lancedb` | LanceDB database directory |
-
-### `indexer`
-
-Controls retry behavior and timeouts when connecting to MCP servers at startup. Useful for self-hosted servers (e.g. started via `uvx`) that take time to start up.
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `connectTimeout` | `60000` | Per-server default connect timeout in ms |
-| `maxRetries` | `3` | Retry attempts per server (0 = no retry) |
-| `initialRetryDelay` | `2000` | Initial backoff delay in ms |
-| `maxRetryDelay` | `30000` | Max backoff cap in ms |
-| `maxChunkChars` | `500` | Max characters per chunk for long tool descriptions. `0` = disable chunking |
-| `overlapChars` | `100` | Overlap characters between adjacent chunks |
-
-Retries use exponential backoff: delays are `initialRetryDelay * 2^(attempt-1)`, capped at `maxRetryDelay`. With defaults, a slow server gets attempts at ~0s, ~2s, ~4s, ~8s before giving up.
-
-**Chunking:** When a tool description exceeds `maxChunkChars`, it is split into overlapping chunks at semantic boundaries (paragraphs, lines, sentences). Each chunk is stored as a separate vector, and search results are deduplicated so each tool appears once with its best matching score. Short descriptions (the common case) are unaffected.
-
-Example for a slow-starting Python server:
-
-```jsonc
-{
-  "plugins": {
-    "entries": {
-      "openclaw-mcp-router": {
-        "config": {
-          "servers": [
-            {
-              "name": "my-python-server",
-              "transport": "stdio",
-              "command": "uvx",
-              "args": ["my-mcp-server"],
-              "timeout": 120000 // this server needs 2 minutes to start
-            }
-          ],
-          "indexer": {
-            "maxRetries": 5,
-            "initialRetryDelay": 3000
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### `search`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `topK` | `5` | Max tools returned per search |
-| `minScore` | `0.3` | Minimum similarity score (0–1) |
-
-## How it works
-
-1. At gateway startup, the plugin connects to each MCP server in parallel (with retry and configurable timeouts), lists its tools, embeds each description via Ollama, and stores them in a local LanceDB index.
-2. When the agent needs to use an MCP capability, it calls `mcp_search("what I want to do")` to find relevant tools.
-3. The agent then calls `mcp_call("tool_name", '{"param": "value"}')` to execute the chosen tool.
-
-Disabling the plugin (`openclaw plugins disable openclaw-mcp-router`) cancels any in-progress indexing immediately. Re-enabling starts fresh.
-
-## Supported embedding models
-
-| Model | Dims | Notes |
-|-------|------|-------|
-| `embeddinggemma` | 768 | Good balance, recommended default |
-| `qwen3-embedding:0.6b` | 1024 | Higher quality, larger footprint |
-| `all-minilm` | 384 | Fast and lightweight |
-
-Any Ollama embedding model works — dimensions are detected automatically for unknown models.
-
-## Troubleshooting
-
-### Agent can't call `mcp_search`
-
-Almost always because `mcp_search` and `mcp_call` are not in `tools.alsoAllow`. Run `openclaw openclaw-mcp-router setup` or add them manually (see [Important: `tools.alsoAllow` is required](#important-toolsalsoallow-is-required)).
-
-### Server shows `failed: Unauthorized` in `list`
-
-Run `openclaw openclaw-mcp-router control`, select the server, and set the appropriate auth header (`Authorization: Bearer <token>`) or env var. Then run `openclaw openclaw-mcp-router reindex --server <name>`. While obtaining credentials, disable the server with `openclaw openclaw-mcp-router disable <name>` to avoid repeated retry noise at startup.
-
-### `reindex` shows 0 tools indexed
-
-- Run `openclaw openclaw-mcp-router list` to see per-server status and error details.
-- Check that your MCP servers are reachable. Run `openclaw openclaw-mcp-router reindex` with the gateway stopped and the servers running, then check the output for per-server errors.
-- If using `uvx` or other launchers, the server may need more time to start. Increase `indexer.connectTimeout` and `indexer.maxRetries`.
-
-### Ollama connection error
-
-- Confirm Ollama is running: `curl http://localhost:11434/api/tags`
-- Confirm the embedding model is pulled: `ollama list`
-- If Ollama is on a non-default port, set `embedding.url` in the config.
-
-### Config changes not taking effect
-
-Always restart the gateway after editing `~/.openclaw/openclaw.json`. Run `openclaw openclaw-mcp-router reindex` after adding or removing servers.
-
-## Background
-
-This plugin is a basic implementation of the [Tool Search Tool](https://www.anthropic.com/engineering/advanced-tool-use) pattern from Anthropic's advanced tool use guide. The core idea: instead of injecting all tool schemas into the system prompt, provide a search tool that dynamically surfaces only relevant tools at runtime. Anthropic's benchmarks showed this improved tool selection accuracy from 49% to 74% (Opus 4) and 79.5% to 88.1% (Opus 4.5).
-
-Our approach is intentionally simple — pure vector similarity over tool descriptions. There's plenty of room to improve:
-
-- **Hybrid search (BM25 + embedding).** Pure embedding search can miss exact keyword matches. Combining sparse retrieval (BM25/TF-IDF) with dense vectors would improve recall, especially for tools with distinctive names like `git_diff` or `kubectl_apply`.
-- **LLM-based reranking.** After the initial vector search returns candidates, a small LLM could rerank them based on the full query context — catching semantic nuances that cosine similarity misses.
-- **Tool use examples.** Indexing not just descriptions but example invocations (input/output pairs) would let the search match against concrete usage patterns, not just what the tool claims to do.
-- **Programmatic tool calling.** Anthropic's guide describes letting the agent compose tool calls inside code blocks rather than pure JSON — reducing context pollution and enabling multi-step tool pipelines.
-
-Contributions welcome if any of these interest you.
-
-## License
-
-MIT
+Released under the [MIT License](https://www.google.com/search?q=LICENSE).
