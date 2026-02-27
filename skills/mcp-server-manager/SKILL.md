@@ -78,3 +78,12 @@ openclaw openclaw-mcp-router add github npx -y @modelcontextprotocol/server-gith
 - No results in `mcp_search`: verify server is enabled and indexed.
 - `list` shows `failed`: inspect endpoint/command/env and rerun reindex.
 - Server missing: check whether it exists in inline config vs `.mcp.json` and whether an inline entry with same name is overriding it.
+
+
+## Setup Behavior (mcporter-aware)
+
+- During `openclaw openclaw-mcp-router setup`, detect whether `mcporter` is installed and suggest `mcp_search` schema defaults accordingly.
+- First-install guidance:
+  - no `mcporter`: keep params visible by default (`search.includeParametersDefault=true`)
+  - with `mcporter`: prefer compact cards by default (`search.includeParametersDefault=false`)
+- This can still be overridden by users later in plugin config.
