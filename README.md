@@ -39,12 +39,13 @@ Refs:
 
 ### 2) Runtime (`mcp_search`)
 - Semantic search over indexed tools
-- **Compact output by default** (description + signature + CLI hint)
-- Full JSON schema only when requested (`include_schema=true`)
+- Default schema verbosity is adaptive:
+  - if `mcporter` is available: compact cards by default
+  - if `mcporter` is not available: include JSON params by default
+- Full JSON schema can always be forced with `include_schema=true`
 
 ### 3) Execute (`mcp_call`)
-- JSON-based execution fallback
-- Can run via MCP SDK (default) or via `mcporter` CLI backend
+- JSON-based execution path (classic MCP params flow)
 
 ---
 
@@ -55,7 +56,7 @@ Router is now optimized for a CLI-first workflow:
 - Prefer: `mcporter call <server>.<tool> ...`
 - Fallback: `mcp_call(tool_name, params_json)`
 
-`mcp_search` now returns compact cards to save tokens by default, while still preserving original JSON schema in metadata/storage.
+`mcp_search` adapts to environment: compact when mcporter is present, schema-forward when it is not (so agents can drive `mcp_call` reliably).
 
 ---
 
@@ -90,14 +91,11 @@ In `~/.openclaw/openclaw.json` under `plugins.entries.openclaw-mcp-router.config
 {
   "search": {
     "topK": 5,
-    "minScore": 0.3,
-    "includeParametersDefault": false
-  },
-  "callExecution": {
-    "mode": "sdk", // or "mcporter-cli"
-    "cliCommand": "npx",
-    "cliArgs": ["-y", "mcporter"],
-    "timeoutMs": 60000
+    "minScore": 0.3
+    // includeParametersDefault optional:
+    // true  -> always include params
+    // false -> always compact
+    // unset -> auto (based on mcporter availability)
   },
   "indexer": {
     "connectTimeout": 60000,
@@ -113,9 +111,9 @@ In `~/.openclaw/openclaw.json` under `plugins.entries.openclaw-mcp-router.config
 
 ### Notes
 
-- `search.includeParametersDefault=false` keeps search output compact by default.
+- `search.includeParametersDefault` is optional; if omitted, router auto-decides based on mcporter availability.
 - `indexer.generateCliArtifacts=true` enables best-effort per-server `mcporter generate-cli` during reindex.
-- `callExecution.mode="mcporter-cli"` switches `mcp_call` backend to shell out through mcporter.
+- `mcp_call` stays the classic JSON meta-tool (no backend mode flag).
 
 ---
 
@@ -149,7 +147,6 @@ Huge thanks to **@steipete** and [mcporter](https://github.com/steipete/mcporter
 PRs welcome — especially around:
 - better reranking
 - hybrid retrieval (vector + lexical)
-- richer execution policy controls (`prefer-cli | fallback-json | json-only`)
 
 ## License
 

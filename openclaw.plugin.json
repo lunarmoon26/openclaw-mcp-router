@@ -204,36 +204,7 @@
           },
           "includeParametersDefault": {
             "type": "boolean",
-            "description": "Include full input schema by default in mcp_search results (default: false)"
-          }
-        }
-      },
-      "callExecution": {
-        "type": "object",
-        "description": "How mcp_call executes tool invocations",
-        "properties": {
-          "mode": {
-            "type": "string",
-            "enum": [
-              "sdk",
-              "mcporter-cli"
-            ],
-            "description": "sdk (default) uses MCP SDK directly; mcporter-cli shells out to mcporter call"
-          },
-          "cliCommand": {
-            "type": "string",
-            "description": "Executable for mcporter mode (default: npx)"
-          },
-          "cliArgs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Prefix args before 'call' (default: ['-y','mcporter'])"
-          },
-          "timeoutMs": {
-            "type": "number",
-            "description": "Timeout in ms for mcporter-cli calls (default: 60000)"
+            "description": "Include full input schema by default in mcp_search results. If omitted, defaults automatically based on mcporter availability."
           }
         }
       }

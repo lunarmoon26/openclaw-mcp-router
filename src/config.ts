@@ -45,24 +45,13 @@ export type IndexerConfig = {
   generateCliArtifacts: boolean;
 };
 
-export type CallExecutionConfig = {
-  /** Tool call backend: SDK client (default) or mcporter CLI bridge. */
-  mode: "sdk" | "mcporter-cli";
-  /** CLI executable for mcporter mode (default: npx). */
-  cliCommand: string;
-  /** CLI args prefix for mcporter mode (default: ["-y", "mcporter"]). */
-  cliArgs: string[];
-  /** Timeout for CLI calls in ms (default: 60000). */
-  timeoutMs: number;
-};
 
 export type McpRouterConfig = {
   servers: McpServerConfig[];
   embedding: EmbeddingConfig;
   vectorDb: { path: string };
-  search: { topK: number; minScore: number; includeParametersDefault: boolean };
+  search: { topK: number; minScore: number; includeParametersDefault?: boolean };
   indexer: IndexerConfig;
-  callExecution: CallExecutionConfig;
 };
 
 export type ParseConfigOpts = {
@@ -370,7 +359,7 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   const search = {
     topK: typeof srchRaw.topK === "number" ? Math.min(20, Math.max(1, srchRaw.topK)) : 5,
     minScore: typeof srchRaw.minScore === "number" ? srchRaw.minScore : 0.3,
-    includeParametersDefault: typeof srchRaw.includeParametersDefault === "boolean" ? srchRaw.includeParametersDefault : false,
+    includeParametersDefault: typeof srchRaw.includeParametersDefault === "boolean" ? srchRaw.includeParametersDefault : undefined,
   };
 
   // ── indexer defaults ──
@@ -385,15 +374,5 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
     generateCliArtifacts: typeof idxRaw.generateCliArtifacts === "boolean" ? idxRaw.generateCliArtifacts : false,
   };
 
-  // ── call execution defaults ──
-  const callRaw = (r.callExecution ?? {}) as Record<string, unknown>;
-  const mode = callRaw.mode === "mcporter-cli" ? "mcporter-cli" : "sdk";
-  const callExecution: CallExecutionConfig = {
-    mode,
-    cliCommand: typeof callRaw.cliCommand === "string" ? callRaw.cliCommand : "npx",
-    cliArgs: Array.isArray(callRaw.cliArgs) ? (callRaw.cliArgs as string[]) : ["-y", "mcporter"],
-    timeoutMs: typeof callRaw.timeoutMs === "number" ? Math.max(1_000, callRaw.timeoutMs) : 60_000,
-  };
-
-  return { servers, embedding, vectorDb, search, indexer, callExecution };
+  return { servers, embedding, vectorDb, search, indexer };
 }

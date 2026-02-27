@@ -2,63 +2,46 @@
 
 This document explains the intended execution model:
 
-1. **Reindex for discovery metadata**
-2. **Search returns compact tool cards**
-3. **Execution prefers CLI (`mcporter call`)**
-4. **`mcp_call` remains JSON fallback**
-
-## Goals
-
-- Minimize token usage during tool discovery
-- Keep rich schemas available without always injecting them
-- Enable deterministic, script-friendly MCP execution via CLI
-- Preserve compatibility with classic JSON tool calling
+1. Reindex tools + metadata
+2. Search tools with adaptive schema verbosity
+3. Prefer CLI calls when available
+4. Use `mcp_call` as classic JSON fallback
 
 ## Reindex behavior
 
 During `openclaw openclaw-mcp-router reindex`:
 
-- Router connects to all enabled servers
-- Lists MCP tools
-- Chunks/embeds tool text
+- Router connects to enabled MCP servers
+- Lists tools
+- Chunks/embeds descriptions
 - Stores vectors + metadata in LanceDB
 
 Optional:
-- If `indexer.generateCliArtifacts=true`, router performs best-effort `mcporter generate-cli` per server and writes generated artifacts under router state.
-- Artifact generation is non-blocking for indexing success.
+- If `indexer.generateCliArtifacts=true`, router runs best-effort `mcporter generate-cli` per server.
+- Generation failures do **not** block indexing.
 
-## `mcp_search` response model
+## `mcp_search` behavior
 
-Default mode is **compact**:
-- tool name
-- server
-- description
-- inferred signature
-- preferred CLI call hint
-- fallback JSON call hint
+`mcp_search` supports adaptive defaults:
 
-If full schema is needed:
-- pass `include_schema=true`
-- or set `search.includeParametersDefault=true`
+- If `mcporter` is installed: default to compact cards (save tokens)
+- If `mcporter` is not installed: include JSON params by default (so agents can call `mcp_call` reliably)
 
-## Execution policy
+Overrides:
+- request-level: `include_schema=true|false`
+- config-level: `search.includeParametersDefault=true|false`
+  - if unset, auto mode is used
 
-Current practical policy:
+## `mcp_call` behavior
 
-- Prefer CLI call shape when agent/runtime can use mcporter:
-  - `mcporter call <server>.<tool> ...`
-- Fall back to `mcp_call` JSON path otherwise.
+`mcp_call` remains the original JSON meta-tool path:
 
-`mcp_call` supports:
-- `sdk` backend (default)
-- `mcporter-cli` backend (`callExecution.mode="mcporter-cli"`)
+- resolve tool owner by registry
+- open MCP connection
+- call tool with `params_json`
+- return content/errors
 
-## Why this helps
-
-- Search output stays small and focused
-- Less prompt pollution from giant JSON schemas
-- CLI invocation can be more scriptable and easier to reuse in automation
-- Existing JSON workflows still work
+No backend mode flag is required.
 
 ## Recommended config
 
@@ -71,14 +54,8 @@ Current practical policy:
         "config": {
           "search": {
             "topK": 5,
-            "minScore": 0.3,
-            "includeParametersDefault": false
-          },
-          "callExecution": {
-            "mode": "sdk",
-            "cliCommand": "npx",
-            "cliArgs": ["-y", "mcporter"],
-            "timeoutMs": 60000
+            "minScore": 0.3
+            // includeParametersDefault optional (true|false)
           },
           "indexer": {
             "generateCliArtifacts": true
@@ -92,8 +69,8 @@ Current practical policy:
 
 ## Acknowledgement
 
-Special thanks to **@steipete** and **MCPorter** for the CLI-first inspiration:
+Special thanks to **@steipete** and **MCPorter**:
 <https://github.com/steipete/mcporter>
 
-And Anthropic’s engineering write-up for the broader execution pattern:
+Anthropic reference:
 <https://www.anthropic.com/engineering/code-execution-with-mcp>

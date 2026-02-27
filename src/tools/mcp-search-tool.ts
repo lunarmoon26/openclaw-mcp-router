@@ -7,6 +7,7 @@ type SearchDeps = {
   store: McpToolVectorStore;
   embeddings: Embeddings;
   cfg: { topK: number; minScore: number; includeParametersDefault?: boolean };
+  hasMcporter: boolean;
 };
 
 /** Extract a string param tolerating both camelCase and snake_case keys. */
@@ -61,7 +62,7 @@ export function createMcpSearchTool(deps: SearchDeps) {
       ),
       include_schema: Type.Optional(
         Type.Boolean({
-          description: "Include full JSON parameter schema in results (default: false).",
+          description: "Include full JSON parameter schema in results. Default is auto (enabled when mcporter is unavailable).",
         }),
       ),
     }),
@@ -77,7 +78,10 @@ export function createMcpSearchTool(deps: SearchDeps) {
 
       const rawLimit = typeof params.limit === "number" ? params.limit : deps.cfg.topK;
       const limit = Math.max(1, Math.min(20, rawLimit));
-      const includeSchema = readBoolParam(params, "include_schema") ?? deps.cfg.includeParametersDefault ?? false;
+      const includeSchema =
+        readBoolParam(params, "include_schema") ??
+        deps.cfg.includeParametersDefault ??
+        !deps.hasMcporter;
 
       let vector: number[];
       try {
@@ -155,7 +159,7 @@ export function createMcpSearchTool(deps: SearchDeps) {
 
       const text =
         `Found ${results.length} matching tool(s). ` +
-        `${includeSchema ? "Including full schema." : "Using compact mode (set include_schema=true for full JSON schema)."}\n\n` +
+        `${includeSchema ? "Including full schema." : "Using compact mode (set include_schema=true for full JSON schema; schema auto-enables when mcporter is unavailable)."}\n\n` +
         cards;
 
       return {
