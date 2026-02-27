@@ -150,4 +150,22 @@ export class McpToolVectorStore {
     await this.ensureInitialized();
     return this.table!.countRows();
   }
+
+  /** Count unique tools per server (deduplicates multi-chunk entries). */
+  async countToolsByServer(): Promise<Map<string, number>> {
+    await this.ensureInitialized();
+    const rows = await this.table!.query().select(["server_name", "tool_name"]).toArray();
+    const seen = new Set<string>();
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const srv = row.server_name as string;
+      const tool = row.tool_name as string;
+      const key = `${srv}::${tool}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        counts.set(srv, (counts.get(srv) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }
 }

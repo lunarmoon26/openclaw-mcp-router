@@ -1,8 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { parseConfig } from "./config.js";
-import { CMD_ADD_SERVER, CMD_LIST_SERVER, CMD_REINDEX, CMD_REMOVE_SERVER, CMD_SETUP, CMD_STATS, EXTENSION_ID } from "./constants.js";
+import { CMD_ADD_SERVER, CMD_CONTROL, CMD_DISABLE_SERVER, CMD_ENABLE_SERVER, CMD_LIST_SERVER, CMD_REINDEX, CMD_REMOVE_SERVER, CMD_SETUP, EXTENSION_ID } from "./constants.js";
 import { createEmbeddings } from "./embeddings.js";
-import { runIndexer } from "./indexer.js";
+import { runIndexer, type IndexerResult } from "./indexer.js";
 import { McpRegistry } from "./mcp-registry.js";
 import { createMcpCallTool } from "./tools/mcp-call-tool.js";
 import { createMcpSearchTool } from "./tools/mcp-search-tool.js";
@@ -22,6 +24,24 @@ const mcpRouterPlugin = {
 
     // api.resolvePath handles ~ expansion and resolves relative paths to the config dir
     const resolvedDbPath = api.resolvePath(cfg.vectorDb.path);
+    const statusPath = path.join(path.dirname(resolvedDbPath), "status.json");
+
+    function writeIndexStatus(result: IndexerResult, merge = false): void {
+      type StatusFile = { timestamp: string; servers: IndexerResult["servers"] };
+      let existing: StatusFile | null = null;
+      if (merge) {
+        try {
+          existing = JSON.parse(fs.readFileSync(statusPath, "utf-8")) as StatusFile;
+        } catch { /* no prior status */ }
+      }
+      const serverMap = new Map(existing?.servers.map((s) => [s.name, s]) ?? []);
+      for (const s of result.servers) serverMap.set(s.name, s);
+      const status: StatusFile = { timestamp: new Date().toISOString(), servers: [...serverMap.values()] };
+      try {
+        fs.mkdirSync(path.dirname(statusPath), { recursive: true });
+        fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + "\n", "utf-8");
+      } catch { /* best effort */ }
+    }
 
     const embeddings = createEmbeddings(cfg.embedding);
     const store = new McpToolVectorStore(resolvedDbPath, () => embeddings.probeDims());
@@ -42,6 +62,14 @@ const mcpRouterPlugin = {
           });
 
         router
+          .command(CMD_CONTROL)
+          .description("Interactive TUI to enable/disable servers and manage auth")
+          .action(async () => {
+            const { runControlCommand } = await import("./setup/control-command.js");
+            await runControlCommand();
+          });
+
+        router
           .command(CMD_ADD_SERVER)
           .description("Add an MCP server to the config")
           .argument("<name>", "Server name")
@@ -55,12 +83,13 @@ const mcpRouterPlugin = {
             [] as string[],
           )
           .option("--timeout <ms>", "Per-server connect timeout in ms", parseInt)
+          .option("--file", "Add server to ~/.openclaw/openclaw-mcp-router/.mcp.json instead of openclaw.json")
           .action(
             async (
               name: string,
               commandOrUrl: string,
               extraArgs: string[],
-              opts: { transport?: string; env: string[]; timeout?: number },
+              opts: { transport?: string; env: string[]; timeout?: number; file?: boolean },
             ) => {
               const { addServer } = await import("./commands/add-server.js");
               addServer(name, commandOrUrl, extraArgs, opts);
@@ -78,29 +107,40 @@ const mcpRouterPlugin = {
 
         router
           .command(CMD_LIST_SERVER)
-          .description("List configured MCP servers")
+          .description("List configured MCP servers with tool counts and status")
           .action(async () => {
             const { listServers } = await import("./commands/list-servers.js");
-            listServers();
+            await listServers();
           });
 
         router
           .command(CMD_REINDEX)
           .description("Re-index all configured MCP servers into the vector store")
-          .action(async () => {
+          .option("--server <name>", "Re-index only a specific server")
+          .action(async (opts: { server?: string }) => {
             const abort = new AbortController();
             const onSigint = () => abort.abort(new Error("interrupted"));
             process.on("SIGINT", onSigint);
             try {
-              console.log(`${EXTENSION_ID}: re-indexing...`);
+              let targetCfg = cfg;
+              if (opts.server) {
+                const filtered = cfg.servers.filter((s) => s.name === opts.server);
+                if (filtered.length === 0) {
+                  console.error(`${EXTENSION_ID}: server "${opts.server}" not found (check it is not disabled)`);
+                  process.exit(1);
+                }
+                targetCfg = { ...cfg, servers: filtered };
+              }
+              console.log(`${EXTENSION_ID}: re-indexing${opts.server ? ` "${opts.server}"` : ""}...`);
               const result = await runIndexer({
-                cfg,
+                cfg: targetCfg,
                 store,
                 embeddings,
                 registry,
                 logger: api.logger,
                 signal: abort.signal,
               });
+              writeIndexStatus(result, !!opts.server);
               console.log(
                 `${EXTENSION_ID}: done — ${result.indexed} indexed, ${result.failed} failed`,
               );
@@ -110,11 +150,21 @@ const mcpRouterPlugin = {
           });
 
         router
-          .command(CMD_STATS)
-          .description("Show number of indexed MCP tools")
-          .action(async () => {
-            const count = await store.countTools();
-            console.log(`${EXTENSION_ID}: ${count} tools indexed in ${resolvedDbPath}`);
+          .command(CMD_DISABLE_SERVER)
+          .description("Disable an MCP server (skip during indexing)")
+          .argument("<name>", "Server name to disable")
+          .action(async (name: string) => {
+            const { disableServer } = await import("./commands/disable-server.js");
+            disableServer(name);
+          });
+
+        router
+          .command(CMD_ENABLE_SERVER)
+          .description("Re-enable a previously disabled MCP server")
+          .argument("<name>", "Server name to enable")
+          .action(async (name: string) => {
+            const { enableServer } = await import("./commands/enable-server.js");
+            enableServer(name);
           });
       },
       { commands: [EXTENSION_ID] },
@@ -155,6 +205,7 @@ const mcpRouterPlugin = {
           logger: api.logger,
           signal: indexerAbort.signal,
         });
+        writeIndexStatus(result);
         api.logger.info(`${EXTENSION_ID}: ready — ${result.indexed} tools indexed`);
       },
       stop: async () => {

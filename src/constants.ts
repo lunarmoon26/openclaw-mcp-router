@@ -16,4 +16,6 @@ export const CMD_ADD_SERVER = "add";
 export const CMD_REMOVE_SERVER = "remove";
 export const CMD_LIST_SERVER = "list";
 export const CMD_REINDEX = "reindex";
-export const CMD_STATS = "stats";
+export const CMD_DISABLE_SERVER = "disable";
+export const CMD_ENABLE_SERVER = "enable";
+export const CMD_CONTROL = "control";

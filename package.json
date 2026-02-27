@@ -22,7 +22,8 @@
     "@lancedb/lancedb": "^0.26.2",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@sinclair/typebox": "^0.34.48",
-    "json5": "^2.2.3"
+    "json5": "^2.2.3",
+    "open": "^11.0.0"
   },
   "peerDependencies": {
     "openclaw": "^2026.2.23"

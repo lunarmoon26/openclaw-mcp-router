@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { McpTransportKind } from "../config.js";
 import { CMD_REINDEX, EXTENSION_ID } from "../constants.js";
 import {
@@ -12,6 +14,7 @@ export type AddServerOptions = {
   transport?: string;
   env?: string[];
   timeout?: number;
+  file?: boolean;
 };
 
 export function addServer(
@@ -21,11 +24,6 @@ export function addServer(
   opts: AddServerOptions,
 ): void {
   const transport = (opts.transport ?? "stdio") as McpTransportKind;
-  const configPath = locateOpenclawConfig();
-  let config = readOpenclawConfig(configPath);
-  const pluginCfg = getPluginConfig(config);
-
-  const mcpServers = { ...((pluginCfg.mcpServers ?? {}) as Record<string, unknown>) };
 
   const entry: Record<string, unknown> = {};
 
@@ -54,6 +52,35 @@ export function addServer(
     entry.timeout = opts.timeout;
   }
 
+  if (opts.file) {
+    const configPath = locateOpenclawConfig();
+    const mcpJsonPath = path.join(path.dirname(configPath), EXTENSION_ID, ".mcp.json");
+
+    let existing: Record<string, unknown> = {};
+    try {
+      const content = fs.readFileSync(mcpJsonPath, "utf-8");
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      existing = (
+        parsed.mcpServers &&
+        typeof parsed.mcpServers === "object" &&
+        !Array.isArray(parsed.mcpServers)
+      )
+        ? (parsed.mcpServers as Record<string, unknown>)
+        : parsed;
+    } catch { /* file doesn't exist yet */ }
+
+    existing[name] = entry;
+
+    fs.mkdirSync(path.dirname(mcpJsonPath), { recursive: true });
+    fs.writeFileSync(mcpJsonPath, JSON.stringify({ mcpServers: existing }, null, 2) + "\n", "utf-8");
+    console.log(`Server '${name}' added to ${mcpJsonPath}. Run: openclaw ${EXTENSION_ID} ${CMD_REINDEX}`);
+    return;
+  }
+
+  const configPath = locateOpenclawConfig();
+  let config = readOpenclawConfig(configPath);
+  const pluginCfg = getPluginConfig(config);
+  const mcpServers = { ...((pluginCfg.mcpServers ?? {}) as Record<string, unknown>) };
   mcpServers[name] = entry;
 
   config = patchPluginConfig(config, { ...pluginCfg, mcpServers });

@@ -1,7 +1,8 @@
 import { cancel, confirm, intro, isCancel, outro, select, text } from "@clack/prompts";
-import type { McpServerConfig, McpTransportKind } from "../config.js";
+import { parseConfig, type McpServerConfig, type McpTransportKind } from "../config.js";
 import {
   ensureToolsAllowlist,
+  getPluginConfig,
   locateOpenclawConfig,
   patchPluginConfig,
   readOpenclawConfig,
@@ -67,7 +68,25 @@ async function promptServer(): Promise<McpServerConfig> {
 }
 
 export async function runSetupCommand(): Promise<void> {
+  const configPath = locateOpenclawConfig();
+
   intro(`${EXTENSION_ID} setup`);
+
+  // Show existing servers from all supported locations so the user can see what's configured
+  const existingOpenclawCfg = readOpenclawConfig(configPath);
+  const existingPluginCfg = getPluginConfig(existingOpenclawCfg);
+  let existingServers: McpServerConfig[] = [];
+  try {
+    existingServers = parseConfig(existingPluginCfg).servers;
+  } catch {
+    // ignore — best effort display
+  }
+  if (existingServers.length > 0) {
+    const lines = existingServers
+      .map((s) => `  • ${s.name}  (${s.transport})  ${s.transport === "stdio" ? s.command : s.url}`)
+      .join("\n");
+    console.log(`\nExisting servers:\n${lines}\n`);
+  }
 
   // Step 1: Embedding model
   const ollamaUrl = await text({
@@ -149,8 +168,6 @@ export async function runSetupCommand(): Promise<void> {
   }
 
   // Step 4: Write config
-  const configPath = locateOpenclawConfig();
-
   // Build mcpServers dict (key = server name, value = entry without name field)
   const mcpServers: Record<string, unknown> = {};
   for (const srv of servers) {

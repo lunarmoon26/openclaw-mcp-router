@@ -6,6 +6,8 @@ import type { EmbeddingConfig, EmbeddingProvider } from "./embeddings.js";
 
 export type McpTransportKind = "stdio" | "sse" | "http";
 
+export type McpServerSource = "inline" | "file" | "legacy";
+
 export type McpServerConfig = {
   name: string;
   transport: McpTransportKind;
@@ -21,6 +23,9 @@ export type McpServerConfig = {
   headers?: Record<string, string>;
   /** Per-server connect timeout in ms; overrides indexer.connectTimeout */
   timeout?: number;
+  /** Where this server was loaded from: "inline" (mcpServers in openclaw.json),
+   * "file" (.mcp.json / mcpServersFile), or "legacy" (servers[] array). */
+  source?: McpServerSource;
 };
 
 export type IndexerConfig = {
@@ -93,13 +98,16 @@ function locateOpenclawDir(): string {
 
 // ── mcpServers dict parsing ──────────────────────────────────────────────
 
-function parseMcpServersDict(dict: Record<string, unknown>): McpServerConfig[] {
+function parseMcpServersDict(dict: Record<string, unknown>, source: "inline" | "file" = "inline"): McpServerConfig[] {
   const servers: McpServerConfig[] = [];
   for (const [name, raw] of Object.entries(dict)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new Error(`${EXTENSION_ID}: mcpServers["${name}"] must be an object`);
     }
     const sv = raw as Record<string, unknown>;
+
+    // Skip servers explicitly disabled by the user
+    if (sv.disabled === true) continue;
 
     // Infer transport from fields
     let transport: McpTransportKind;
@@ -134,6 +142,7 @@ function parseMcpServersDict(dict: Record<string, unknown>): McpServerConfig[] {
       url,
       headers: Object.keys(rawHeaders).length > 0 ? expandEnvRecord(rawHeaders) : undefined,
       timeout: typeof sv.timeout === "number" ? sv.timeout : undefined,
+      source,
     });
   }
   return servers;
@@ -168,7 +177,7 @@ function loadMcpServersFile(filePath: string, opts?: ParseConfigOpts): McpServer
     ? (obj.mcpServers as Record<string, unknown>)
     : obj;
 
-  return parseMcpServersDict(dict);
+  return parseMcpServersDict(dict, "file");
 }
 
 // ── Embedding config resolution ──────────────────────────────────────────
@@ -282,6 +291,7 @@ function parseLegacyServers(serversRaw: unknown[]): McpServerConfig[] {
       url: typeof sv.url === "string" ? sv.url : undefined,
       headers: Object.keys(rawHeaders).length > 0 ? expandEnvRecord(rawHeaders) : undefined,
       timeout: typeof sv.timeout === "number" ? sv.timeout : undefined,
+      source: "legacy" as const,
     };
   });
 }
@@ -297,18 +307,31 @@ export function parseConfig(raw: unknown, opts?: ParseConfigOpts): McpRouterConf
   }
   const r = normalized as Record<string, unknown>;
 
-  // ── Server resolution priority: mcpServers > mcpServersFile > servers (legacy) ──
-  let servers: McpServerConfig[] = [];
+  // ── Server resolution: file-based base + inline mcpServers overlay ──
+  // All sources are merged; inline mcpServers wins on name collision.
 
-  if (r.mcpServers && typeof r.mcpServers === "object" && !Array.isArray(r.mcpServers)) {
-    servers = parseMcpServersDict(r.mcpServers as Record<string, unknown>);
-  } else if (typeof r.mcpServersFile === "string") {
-    servers = loadMcpServersFile(r.mcpServersFile, opts);
+  // Step 1: Load file-based servers (lower priority)
+  const fileServers: McpServerConfig[] = typeof r.mcpServersFile === "string"
+    ? loadMcpServersFile(r.mcpServersFile, opts)
+    : loadMcpServersFile(path.join(locateOpenclawDir(), EXTENSION_ID, ".mcp.json"), opts);
+
+  // Step 2: Parse inline mcpServers (higher priority)
+  const hasInline = r.mcpServers && typeof r.mcpServers === "object" && !Array.isArray(r.mcpServers);
+  const inlineServers = hasInline
+    ? parseMcpServersDict(r.mcpServers as Record<string, unknown>, "inline")
+    : [];
+
+  // Step 3: Merge — inline wins over file-based on name collision
+  let servers: McpServerConfig[];
+  if (fileServers.length > 0 || inlineServers.length > 0) {
+    const nameMap = new Map(fileServers.map((s) => [s.name, s]));
+    for (const s of inlineServers) nameMap.set(s.name, s);
+    servers = [...nameMap.values()];
   } else if (Array.isArray(r.servers) && r.servers.length > 0) {
+    // Legacy fallback: only when no file-based or inline servers found
     servers = parseLegacyServers(r.servers);
   } else {
-    // Auto-load default file when no server source is configured
-    servers = loadMcpServersFile(path.join(locateOpenclawDir(), EXTENSION_ID, ".mcp.json"), opts);
+    servers = [];
   }
 
   // Empty servers is valid — user may add servers later.

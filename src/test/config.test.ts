@@ -22,6 +22,8 @@ describe("parseConfig", () => {
   afterEach(() => {
     delete process.env.TEST_MCP_TOKEN;
     delete process.env.TEST_API_KEY;
+    delete process.env.OPENCLAW_CONFIG_PATH;
+    delete process.env.OPENCLAW_STATE_DIR;
   });
 
   // ── Basic validation ──
@@ -219,7 +221,7 @@ describe("parseConfig", () => {
     expect(cfg.servers[0].headers?.Authorization).toBe("Bearer key-abc");
   });
 
-  // ── mcpServers priority over legacy servers ──
+  // ── Server resolution: merge and priority ──
 
   it("mcpServers wins over legacy servers", () => {
     const cfg = parseConfig({
@@ -265,7 +267,7 @@ describe("parseConfig", () => {
     expect(cfg.servers[0].name).toBe("wrapped");
   });
 
-  it("auto-loads default ~/.openclaw/.mcp.json when no servers configured", () => {
+  it("auto-loads default ~/.openclaw/openclaw-mcp-router/.mcp.json when no servers configured", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         autoloaded: { command: "auto-cmd" },
@@ -276,6 +278,72 @@ describe("parseConfig", () => {
 
     expect(cfg.servers).toHaveLength(1);
     expect(cfg.servers[0].name).toBe("autoloaded");
+    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalledWith(
+      expect.stringMatching(/\.openclaw[/\\]openclaw-mcp-router[/\\]\.mcp\.json$/),
+      "utf-8",
+    );
+  });
+
+  it("auto-load path uses OPENCLAW_CONFIG_PATH env var base dir", () => {
+    process.env.OPENCLAW_CONFIG_PATH = "/custom/dir/openclaw.json";
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ envServer: { command: "env-cmd" } }),
+    );
+
+    const cfg = parseConfig({});
+
+    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalledWith(
+      "/custom/dir/openclaw-mcp-router/.mcp.json",
+      "utf-8",
+    );
+    expect(cfg.servers[0].name).toBe("envServer");
+  });
+
+  it("auto-load path uses OPENCLAW_STATE_DIR env var", () => {
+    process.env.OPENCLAW_STATE_DIR = "/state/dir";
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ stateServer: { command: "state-cmd" } }),
+    );
+
+    const cfg = parseConfig({});
+
+    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalledWith(
+      "/state/dir/openclaw-mcp-router/.mcp.json",
+      "utf-8",
+    );
+    expect(cfg.servers[0].name).toBe("stateServer");
+  });
+
+  it("auto-loads .mcp.json even when mcpServers is an empty object", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ fromFile: { command: "file-cmd" } }),
+    );
+    const cfg = parseConfig({ mcpServers: {} });
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].name).toBe("fromFile");
+  });
+
+  it("merges inline mcpServers with .mcp.json servers", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ fileServer: { command: "file-cmd" } }),
+    );
+    const cfg = parseConfig({
+      mcpServers: { inlineServer: { command: "inline-cmd" } },
+    });
+    expect(cfg.servers).toHaveLength(2);
+    expect(cfg.servers.find((s) => s.name === "fileServer")).toBeDefined();
+    expect(cfg.servers.find((s) => s.name === "inlineServer")).toBeDefined();
+  });
+
+  it("inline mcpServers wins over .mcp.json on name collision", () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ server1: { command: "file-cmd" } }),
+    );
+    const cfg = parseConfig({
+      mcpServers: { server1: { command: "inline-cmd" } },
+    });
+    expect(cfg.servers).toHaveLength(1);
+    expect(cfg.servers[0].command).toBe("inline-cmd");
   });
 
   it("uses resolvePath option for mcpServersFile", () => {

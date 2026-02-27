@@ -1,151 +1,84 @@
 ---
 name: mcp-router
-description: Searches configured MCP servers for external tools by description and executes them on demand, eliminating the need to know tool names in advance. Use when working with any external MCP capability — file operations, web APIs, databases, code execution, GitHub, Kubernetes, Slack, Notion, or any other configured MCP server. Covers writing effective mcp_search queries, reading tool cards and input schemas, formatting mcp_call params_json correctly, and recovering when searches return no matches.
-license: MIT
+description: Discover and route tasks to configured MCP tools using mcp_search + mcp_call. Use when a task needs external capabilities (APIs, SaaS, databases, web, files, messaging, infra) and the best tool is not already known in-session, especially before falling back to manual shell/curl/web workflows.
 ---
 
-# MCP Router: Search and Call External Tools
+# MCP Router
 
-Two tools provide access to all configured MCP servers without loading their schemas upfront:
+Use MCP as the first integration layer for external capabilities.
 
-- **`mcp_search(query)`** — find tools by semantic description; returns tool cards with names and input schemas
-- **`mcp_call(tool_name, params_json)`** — execute a specific tool by its exact name
+## Core Rule
 
-## The Core Workflow
+Before manual API calls, curl scripts, or ad-hoc web work, run:
 
-**Always search before calling.** Tool names vary across servers and cannot be guessed reliably.
+- `mcp_search("<action-oriented intent>")`
 
-### 1. Search
+If a relevant tool exists, use it with `mcp_call`.
 
-Call `mcp_search` with an action-oriented query describing the desired capability:
+## Fast Workflow
 
-```
-mcp_search("list files in a directory")
-mcp_search("create a pull request on GitHub")
-mcp_search("run a SQL query against a Postgres database")
-mcp_search("execute Python code in a sandbox")
-```
+1. **Search capability**
+   - Use an action-oriented query: `"create github pull request"`, `"query postgres"`, `"send slack message"`.
+2. **Select tool**
+   - Prefer best intent match + feasible required params.
+3. **Read schema**
+   - Identify required fields, types, enums, nested structure.
+4. **Call tool**
+   - `mcp_call("exact_tool_name", "{...valid JSON...}")`
+5. **Recover on failure**
+   - Fix schema/type mismatch or re-search with rewritten query.
 
-### 2. Read the Tool Card
+## Query Rewrite Ladder (Deterministic)
 
-Each result contains:
+If search quality is poor, retry in this order:
 
-- **`name`** — the exact identifier to pass to `mcp_call`
-- **`description`** — what the tool does
-- **`inputSchema`** — JSON Schema describing required and optional parameters
+1. **Action only**: `"read file"`
+2. **Action + system**: `"read file from s3"`, `"github create issue"`
+3. **Verb swap**: create/open, read/fetch/get, list/enumerate
+4. **Scope adjust**: broaden then narrow
 
-Read `inputSchema` carefully before calling. It specifies:
-- Which parameters are **required** vs optional
-- Parameter **types** (string, number, boolean, array, object)
-- Any **format** constraints or enum values
-- Nested object structure for complex params
+Stop once you have a high-confidence tool.
 
-### 3. Call the Tool
+## Tool Selection Rules
 
-```
-mcp_call("tool_name", '{"param1": "value", "param2": 42}')
-```
+When multiple tools match, rank by:
 
-The second argument (`params_json`) **must be a JSON string** — not a JavaScript object or Python dict. Serialize it first. Include all required parameters exactly as typed in the schema.
+1. Intent fit (description matches requested outcome)
+2. Required-input fit (you can provide required params now)
+3. Simplicity (fewer fragile/optional parameters)
+4. Score/order from search results (tie-breaker)
 
----
+## `mcp_call` Parameter Checklist
 
-## Writing Effective Search Queries
+`params_json` must be a **JSON string**.
 
-The query is embedded and compared against tool descriptions using vector similarity — **not keyword matching**. Semantic phrasing matters.
+- Include all required fields.
+- Match exact types (`42` vs `"42"`, `true` vs `"true"`).
+- Respect enums and nested object shapes.
+- Do not add unsupported keys unless schema allows them.
 
-**Prefer action verbs that describe the outcome:**
+Examples:
 
-| Vague (poor results) | Action-oriented (better results) |
-|---|---|
-| `"files"` | `"read a file"` or `"list directory contents"` |
-| `"github"` | `"create a GitHub pull request"` |
-| `"database"` | `"execute a SQL query against a database"` |
-| `"k8s"` | `"list Kubernetes pods in a namespace"` |
-| `"memory"` | `"store information in long-term memory"` |
-
-**Include the target system when known.** If Brave MCP is configured, `"search the web with Brave"` surfaces it faster than `"search the web"`.
-
-**Start broad, then refine if needed:**
-
-1. Broad first: `"read a file"` → see what file-related tools exist across all servers
-2. Narrow if too many results: `"read a file from S3"` or `"read a local file from disk"`
-
-**Try the domain + action pattern** for unfamiliar capabilities:
-- `"<system> <action>"` → `"Notion create a page"`, `"Slack send a message"`, `"Docker list containers"`
-
----
-
-## Calling the Tool Correctly
-
-### params_json must be a JSON string
-
-```
-✅  mcp_call("filesystem_read_file", '{"path": "/tmp/data.csv"}')
-❌  mcp_call("filesystem_read_file", {path: "/tmp/data.csv"})   ← object, not string
+```text
+✅ mcp_call("filesystem::read_file", '{"path":"/tmp/a.txt"}')
+❌ mcp_call("filesystem::read_file", {"path":"/tmp/a.txt"})
 ```
 
-### Match the schema exactly
-
-- Required fields: **all must be present** or the server returns an error
-- Types: `42` ≠ `"42"` for numeric params; `true` ≠ `"true"` for booleans
-- Nested objects: if the schema shows `{ "options": { "encoding": "string" } }`, pass `'{"options": {"encoding": "utf-8"}}'`
-
-### Reuse the tool name
-
-Each `mcp_call` opens a fresh connection — there is no persistent session between calls. Once a tool name is known from `mcp_search`, reuse it directly for subsequent calls in the same workflow without re-searching.
-
----
-
-## When Search Returns No Useful Results
-
-If `mcp_search` returns nothing relevant or only low-scored matches:
-
-1. **Rephrase** — describe the outcome instead of the mechanism. `"get current date and time"` instead of `"datetime"`.
-2. **Broaden** — remove qualifiers. `"create a file"` instead of `"create a markdown file in the workspace"`.
-3. **Try synonyms** — `"fetch"` vs `"retrieve"` vs `"get"` vs `"read"` can produce different results.
-4. **Check configured servers** — if no server handles the needed capability, `mcp_search` will find nothing regardless of phrasing. Ask the user to run `openclaw openclaw-mcp-router list` to see what is configured.
-
-The index only contains tools from configured MCP servers. Absent capabilities cannot be discovered.
-
----
-
-## Choosing Among Multiple Results
-
-When several tools match the query, use the tool card to decide:
-
-- **Read descriptions** — the closest semantic match to the intent is usually correct
-- **Compare input schemas** — the tool whose required parameters align with available inputs is the practical choice
-- **Prefer the higher-scored result** when descriptions are similar
-- **Check the server name in the tool ID** (format: `serverName::toolName`) to identify which server owns the tool
-
-When two tools look equally good, call the top-ranked one first. If it fails or returns unexpected output, try the next.
-
----
+```text
+✅ mcp_call("db::query", '{"sql":"select * from t where id=$1","params":[123]}')
+```
 
 ## Error Handling
 
-If `mcp_call` returns an error:
+- **Missing required / invalid type**: re-read schema and correct `params_json`.
+- **Unknown tool name**: re-run `mcp_search` and use exact returned name.
+- **Server-side error**: report clearly; retry only with changed inputs.
+- **No relevant tools**: use native fallback tools/workflow.
 
-- **Schema mismatch** (`missing required field`, `invalid type`): re-read the `inputSchema` from the search result and fix the params
-- **Not found** (`tool not registered`, `unknown tool`): re-run `mcp_search` — the tool name may have changed after a reindex
-- **Server error** (MCP server returned an error response): report the error message clearly and offer to retry with different parameters or ask the user for clarification
+## Practical Boundaries
 
-Do not retry the same call with the same parameters if it fails — diagnose the cause first.
+- Reuse known tool names in the same task; avoid unnecessary re-search.
+- Re-search when intent changes materially.
+- Do not loop retries blindly; each retry must change query or params.
 
----
-
-## Quick Reference
-
-```
-# Discover what's available
-mcp_search("action I want to perform")
-
-# Execute the tool
-mcp_call("exact_tool_name", '{"required_param": "value"}')
-
-# When results are poor, rephrase with an action verb + target system
-mcp_search("rephrased query with action verb + target system")
-```
-
-For complete end-to-end workflow references, see [references/workflows.md](references/workflows.md).
+For full examples, see [references/workflows.md](references/workflows.md).

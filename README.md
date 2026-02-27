@@ -84,7 +84,7 @@ Before installing this plugin you need:
 
 The plugin registers `mcp_search` and `mcp_call` as **optional tools** (`optional: true`). This means the gateway loads them, but they are **not exposed to agents** unless explicitly allowlisted.
 
-If the plugin is running and `openclaw openclaw-mcp-router stats` shows indexed tools, but your agent can't call `mcp_search` — this is why. The `setup` command adds this automatically, or you can add it manually:
+If the plugin is running and `openclaw openclaw-mcp-router list` shows indexed tools, but your agent can't call `mcp_search` — this is why. The `setup` command adds this automatically, or you can add it manually:
 
 ```jsonc
 // ~/.openclaw/openclaw.json — global, all agents get access
@@ -152,6 +152,10 @@ Instead of using `setup`, you can edit `~/.openclaw/openclaw.json` directly:
           "search": {
             "topK": 5,      // tools returned per search (1–20)
             "minScore": 0.3 // minimum similarity threshold (0–1)
+          },
+          "indexer": {
+            "maxChunkChars": 500, // Max chars per chunk for long tool descriptions
+            "overlapChars": 100   // Overlap chars between adjacent chunks
           }
         }
       }
@@ -160,9 +164,60 @@ Instead of using `setup`, you can edit `~/.openclaw/openclaw.json` directly:
 }
 ```
 
-## Adding and removing servers
+## Managing servers
 
-The plugin provides non-interactive commands for server management:
+### Interactive control panel
+
+The `control` command opens an interactive TUI for managing server state and credentials — the fastest way to deal with auth errors or temporarily disable a misbehaving server:
+
+```sh
+openclaw openclaw-mcp-router control
+```
+
+The menu shows live status for each server:
+
+```
+✓ deepwiki  (http)   ok — 3 tools
+✕ supabase  (http)   failed: Unauthorized
+● github    (stdio)  disabled
+```
+
+Select a server to:
+
+- **Enable / disable** — a disabled server is skipped during indexing and won't cause startup errors
+- **Set auth header** (HTTP/SSE servers) — add or update any request header; the most common use is setting `Authorization: Bearer <token>` for OAuth or API-key protected servers
+- **Remove a header** — pick from the list of currently set headers
+- **Set environment variable** (stdio servers) — inject an API key or other secret into the server process
+- **Remove an env var** — clean up credentials that are no longer needed
+
+After saving, the TUI prints the exact `reindex` command to apply the change:
+
+```sh
+openclaw openclaw-mcp-router reindex --server supabase
+```
+
+### Handling auth failures
+
+When a server fails with `Unauthorized`, the typical fix is:
+
+```sh
+openclaw openclaw-mcp-router control
+# → select the failing server → "Set auth header"
+# → Header name: Authorization
+# → Header value: Bearer <your-token>
+openclaw openclaw-mcp-router reindex --server <name>
+```
+
+While you're getting credentials, disable the server to stop it consuming retry time at every gateway startup:
+
+```sh
+openclaw openclaw-mcp-router disable <name>
+# ... obtain credentials ...
+openclaw openclaw-mcp-router enable <name>
+openclaw openclaw-mcp-router reindex --server <name>
+```
+
+### Non-interactive server management
 
 ```sh
 # Add a stdio server (local process)
@@ -179,6 +234,10 @@ openclaw openclaw-mcp-router list
 
 # Remove a server
 openclaw openclaw-mcp-router remove github
+
+# Disable / enable without entering the TUI
+openclaw openclaw-mcp-router disable supabase
+openclaw openclaw-mcp-router enable supabase
 ```
 
 After adding or removing servers, run `openclaw openclaw-mcp-router reindex` to update the index. No gateway restart needed.
@@ -186,13 +245,16 @@ After adding or removing servers, run `openclaw openclaw-mcp-router reindex` to 
 ## CLI commands
 
 ```sh
-openclaw openclaw-mcp-router setup               # Interactive setup wizard
-openclaw openclaw-mcp-router add <name> <cmd> [args...]   # Add a stdio server
+openclaw openclaw-mcp-router setup                          # Interactive setup wizard
+openclaw openclaw-mcp-router control                        # Interactive server control panel
+openclaw openclaw-mcp-router add <name> <cmd> [args...]     # Add a stdio server
 openclaw openclaw-mcp-router add --transport sse <name> <url>  # Add SSE/HTTP server
-openclaw openclaw-mcp-router remove <name>       # Remove a server
-openclaw openclaw-mcp-router list                # List configured servers
-openclaw openclaw-mcp-router reindex             # Re-index all servers
-openclaw openclaw-mcp-router stats               # Show indexed tool count
+openclaw openclaw-mcp-router remove <name>                  # Remove a server
+openclaw openclaw-mcp-router list                           # List servers with tool counts and status
+openclaw openclaw-mcp-router disable <name>                 # Disable a server (skip indexing)
+openclaw openclaw-mcp-router enable <name>                  # Re-enable a disabled server
+openclaw openclaw-mcp-router reindex                        # Re-index all servers
+openclaw openclaw-mcp-router reindex --server <name>        # Re-index one server
 ```
 
 **`add` flags:**
@@ -215,7 +277,9 @@ openclaw openclaw-mcp-router stats               # Show indexed tool count
 | `args` | stdio only | Arguments array |
 | `env` | no | Extra env vars merged over process.env; supports `${VAR}` expansion |
 | `url` | sse/http only | Server endpoint URL |
+| `headers` | sse/http only | Extra HTTP headers sent with every request; supports `${VAR}` expansion. Use `Authorization: Bearer <token>` for OAuth/API-key auth |
 | `timeout` | no | Per-server connect timeout in ms; overrides `indexer.connectTimeout` |
+| `disabled` | no | Set to `true` to skip this server during indexing without removing it from the config |
 
 ### `embedding`
 
@@ -307,8 +371,13 @@ Any Ollama embedding model works — dimensions are detected automatically for u
 
 Almost always because `mcp_search` and `mcp_call` are not in `tools.alsoAllow`. Run `openclaw openclaw-mcp-router setup` or add them manually (see [Important: `tools.alsoAllow` is required](#important-toolsalsoallow-is-required)).
 
+### Server shows `failed: Unauthorized` in `list`
+
+Run `openclaw openclaw-mcp-router control`, select the server, and set the appropriate auth header (`Authorization: Bearer <token>`) or env var. Then run `openclaw openclaw-mcp-router reindex --server <name>`. While obtaining credentials, disable the server with `openclaw openclaw-mcp-router disable <name>` to avoid repeated retry noise at startup.
+
 ### `reindex` shows 0 tools indexed
 
+- Run `openclaw openclaw-mcp-router list` to see per-server status and error details.
 - Check that your MCP servers are reachable. Run `openclaw openclaw-mcp-router reindex` with the gateway stopped and the servers running, then check the output for per-server errors.
 - If using `uvx` or other launchers, the server may need more time to start. Increase `indexer.connectTimeout` and `indexer.maxRetries`.
 

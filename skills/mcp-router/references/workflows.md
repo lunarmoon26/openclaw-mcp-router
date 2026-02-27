@@ -1,5 +1,39 @@
 # Complete Workflow Examples
 
+---
+
+## Example 0: Check MCP before web search
+
+**Goal:** Research a topic — but before using a built-in web search, check if a configured MCP server already handles this.
+
+```
+mcp_search("search the web")
+```
+
+**Tool card returned:**
+```
+Tool: brave::web_search
+Description: Search the web using the Brave Search API.
+Input Schema:
+  - query (string, required): The search query
+  - count (number, optional): Number of results (default: 10)
+```
+
+**Call:**
+```
+mcp_call("brave::web_search", '{"query": "MCP server authentication patterns", "count": 5}')
+```
+
+If no web-search tool appears, fall back to whichever search capability is natively available.
+
+**The pattern applies everywhere:**
+- Need to fetch a URL? → `mcp_search("fetch a webpage")` before using curl
+- Need to query a DB? → `mcp_search("run a SQL query")` before writing a connection script
+- Need to post to Slack? → `mcp_search("send a Slack message")` before building an API request
+- Need to read a file? → `mcp_search("read a local file")` before opening a shell
+
+The configured MCP catalog is the toolbox. Exhaust it before doing things the hard way.
+
 These end-to-end examples show the full search → read tool card → call sequence with realistic inputs.
 
 ---

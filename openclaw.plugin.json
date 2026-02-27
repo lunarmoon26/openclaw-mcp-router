@@ -25,7 +25,7 @@
       },
       "mcpServersFile": {
         "type": "string",
-        "description": "Path to a .mcp.json file. Default: ~/.openclaw/.mcp.json"
+        "description": "Path to a .mcp.json file. Default: ~/.openclaw/openclaw-mcp-router/.mcp.json"
       },
       "servers": {
         "type": "array",

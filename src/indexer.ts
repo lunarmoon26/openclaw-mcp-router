@@ -11,9 +11,18 @@ type IndexerLogger = {
   warn(msg: string): void;
 };
 
-type IndexerResult = {
+export type ServerIndexResult = {
+  name: string;
   indexed: number;
   failed: number;
+  /** Set when the server connection itself failed after all retries. */
+  error?: string;
+};
+
+export type IndexerResult = {
+  indexed: number;
+  failed: number;
+  servers: ServerIndexResult[];
 };
 
 /**
@@ -67,13 +76,17 @@ export async function runIndexer(params: {
 
   let indexed = 0;
   let failed = 0;
+  const servers: ServerIndexResult[] = [];
   for (const result of results) {
     if (result.status === "fulfilled") {
       indexed += result.value.indexed;
       failed += result.value.failed;
+      servers.push(result.value);
     } else {
-      logger.warn(`${EXTENSION_ID}: server indexing error — ${String(result.reason)}`);
+      const errMsg = String(result.reason);
+      logger.warn(`${EXTENSION_ID}: server indexing error — ${errMsg}`);
       failed++;
+      servers.push({ name: "unknown", indexed: 0, failed: 1, error: errMsg });
     }
   }
 
@@ -81,7 +94,7 @@ export async function runIndexer(params: {
     `${EXTENSION_ID}: indexed ${indexed} tools across ${cfg.servers.length} servers (${failed} errors)`,
   );
 
-  return { indexed, failed };
+  return { indexed, failed, servers };
 }
 
 async function indexServer(params: {
@@ -92,7 +105,7 @@ async function indexServer(params: {
   registry: McpRegistry;
   logger: IndexerLogger;
   signal?: AbortSignal;
-}): Promise<IndexerResult> {
+}): Promise<ServerIndexResult> {
   const { serverCfg, cfg, store, embeddings, registry, logger, signal } = params;
   const { indexer } = cfg;
   const maxAttempts = indexer.maxRetries + 1; // total attempts = retries + 1
@@ -173,7 +186,7 @@ async function indexServer(params: {
         }
       }
 
-      return { indexed, failed };
+      return { name: serverCfg.name, indexed, failed };
     } catch (err) {
       await client.disconnect();
 
@@ -192,7 +205,7 @@ async function indexServer(params: {
         } else {
           logger.warn(`${EXTENSION_ID}: failed to index server "${serverCfg.name}": ${msg}`);
         }
-        return { indexed: 0, failed: 1 };
+        return { name: serverCfg.name, indexed: 0, failed: 1, error: msg };
       }
 
       // Not last attempt — log and continue to retry
@@ -205,5 +218,5 @@ async function indexServer(params: {
   }
 
   // Should not reach here, but just in case
-  return { indexed: 0, failed: 1 };
+  return { name: serverCfg.name, indexed: 0, failed: 1 };
 }
