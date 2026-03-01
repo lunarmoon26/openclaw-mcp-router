@@ -2,7 +2,7 @@
   "name": "openclaw-mcp-router",
   "version": "0.1.0",
   "private": false,
-  "description": "Dynamic MCP tool router for OpenClaw — semantic search over large MCP catalogs to eliminate context bloat",
+  "description": "OpenClaw MCP router plugin for Model Context Protocol (MCP): semantic tool search and dynamic tool calling to reduce prompt bloat",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -11,9 +11,13 @@
   },
   "keywords": [
     "openclaw",
+    "openclaw-plugin",
     "mcp",
-    "plugin",
-    "vector-search",
+    "model-context-protocol",
+    "mcp-router",
+    "tool-discovery",
+    "semantic-search",
+    "ai-agents",
     "lancedb",
     "ollama"
   ],
@@ -44,5 +48,9 @@
     "skills": [
       "./skills"
     ]
+  },
+  "homepage": "https://github.com/lunarmoon26/openclaw-mcp-router#readme",
+  "bugs": {
+    "url": "https://github.com/lunarmoon26/openclaw-mcp-router/issues"
   }
 }

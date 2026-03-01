@@ -1,15 +1,20 @@
 # OpenClaw MCP Router 🚀
 
-OpenClaw MCP Router is an OpenClaw plugin that keeps MCP tool catalogs out of the system prompt until needed.
+**OpenClaw MCP Router** is a dynamic **MCP (Model Context Protocol) tool router** for OpenClaw. It uses semantic search to discover the right MCP tools at runtime, so agents avoid loading huge tool catalogs into the system prompt.
+
 
 Instead of injecting every MCP schema up front, it provides two lightweight meta-tools:
 
 - `mcp_search` → discover the right tool at runtime
 - `mcp_call` → execute as JSON fallback
 
-This cuts context bloat and improves tool selection quality on large MCP catalogs.
+This cuts context bloat, improves tool selection quality, and reduces token cost on large MCP server inventories.
 
 ---
+
+## Keywords
+
+OpenClaw plugin, MCP router, Model Context Protocol, tool discovery, semantic tool search, AI agent tooling, LanceDB, Ollama embeddings.
 
 ## Why this exists
 
@@ -59,6 +64,13 @@ Router is now optimized for a CLI-first workflow:
 `mcp_search` adapts to environment: compact when mcporter is present, schema-forward when it is not (so agents can drive `mcp_call` reliably).
 
 ---
+
+## Use cases
+
+- Route large MCP tool catalogs without prompt bloat
+- Improve tool selection for coding and automation agents
+- Keep system prompts small while preserving broad MCP capability
+- Enable CLI-first MCP execution with JSON fallback
 
 ## Quick start
 
@@ -158,3 +170,11 @@ PR hygiene:
 ## License
 
 MIT
+
+
+## GitHub SEO checklist
+
+- Set repo description to include: `OpenClaw`, `MCP`, `Model Context Protocol`, `semantic search`
+- Add GitHub topics (see `.github/topics.txt`)
+- Pin this repository on your profile if it's a flagship plugin
+- Link this repo from related blog posts, docs, and demos
